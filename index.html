@@ -72,7 +72,15 @@
         .month-name { font-size: 32px; letter-spacing: 3px; z-index: 2; text-shadow: 2px 2px 5px rgba(0,0,0,0.9); }
         .month-card.has-data::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(45deg, #4a3f35, #2a221d); opacity: 0.7; z-index: 1; }
 
-        .bottom-menu { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; gap: 20px; z-index: 30; pointer-events: auto; }
+        /* ★修正：設定ボタンの位置をより下部へ下げ、スマホのセーフエリア（ホームバー領域）を考慮する */
+        .bottom-menu { 
+            position: absolute; 
+            bottom: 15px; 
+            padding-bottom: env(safe-area-inset-bottom); 
+            left: 0; right: 0; 
+            display: flex; justify-content: center; gap: 20px; 
+            z-index: 30; pointer-events: auto; 
+        }
         .text-btn { background: none; border: 1px solid #444; color: #888; padding: 8px 15px; font-size: 10px; letter-spacing: 2px; cursor: pointer; border-radius: 20px; transition: 0.3s; -webkit-tap-highlight-color: transparent; }
         .text-btn:hover { background-color: #333; color: #f4ebd0; border-color: #666; }
 
@@ -211,6 +219,7 @@
 <body>
 
     <div id="app">
+        <!-- 1. 月選択画面 -->
         <div id="month-screen">
             <div class="month-screen-header">YEAR <span id="current-year-display"></span></div>
             <div id="month-list"></div>
@@ -219,6 +228,7 @@
             </div>
         </div>
 
+        <!-- 2. ホーム画面 -->
         <div id="home-screen">
             <header class="home-header">
                 <button class="back-btn" id="month-back-btn">&lt; BACK</button>
@@ -234,6 +244,7 @@
             </div>
         </div>
 
+        <!-- 3. 撮影画面 -->
         <div id="camera-screen">
             <header class="camera-header">
                 <button class="back-btn" id="camera-back-btn">&lt; BACK</button>
@@ -250,12 +261,14 @@
             <div class="controls"><button id="record-btn" disabled></button></div>
         </div>
 
+        <!-- 4. CUT画面 -->
         <div id="finish-screen">
             <div class="finish-title">CUT.</div>
             <div class="finish-desc">今日の記録をフィルムに焼き付けました</div>
             <button class="finish-btn" id="finish-ok-btn">RETURN</button>
         </div>
 
+        <!-- 5. 再生画面 -->
         <div id="playback-screen">
             <header class="camera-header">
                 <button class="back-btn" id="playback-back-btn">&lt; BACK</button>
@@ -269,6 +282,7 @@
             </div>
         </div>
 
+        <!-- 6. 設定画面 -->
         <div id="settings-screen">
             <div class="settings-title">APP FONT</div>
             <div id="font-select-container"></div>
@@ -286,6 +300,7 @@
             <button id="reset-db-btn" style="margin-top:40px; background:none; border:1px solid #444; color:#666; padding:5px 10px; font-size:10px; border-radius:10px;">RESET ALL DATA</button>
         </div>
 
+        <!-- 7. 書き出し画面 -->
         <div id="export-screen">
             <div class="finish-title" id="export-title">EXPORTING...</div>
             <div class="finish-desc" id="export-desc">1週間分のフィルムを現像しています<br>画面を閉じずにお待ちください</div>
@@ -295,7 +310,6 @@
             <button class="finish-btn" id="export-return-btn" style="display: none;">RETURN</button>
         </div>
 
-        <canvas id="record-canvas"></canvas>
     </div>
 
     <script>
@@ -593,20 +607,23 @@
                 const dayText = document.createElement('span'); dayText.textContent = boxDate; dayBox.appendChild(dayText);
                 
                 dayBox.onclick = async () => {
-                    // ★テスト用制限解除：当日以外でも秒数チェックし、20秒未満ならカメラを開く
-                    const chunks = await getFullChunksForDate(dataKey);
-                    const currentTotal = chunks.reduce((sum, item) => sum + item.duration, 0);
-                    
-                    // 20秒未満なら撮影（再開）へ
-                    if (currentTotal < MAX_RECORD_TIME) {
-                        openCameraScreen(boxYear, boxMonth, boxDate);
-                        return;
+                    if (isToday) {
+                        const chunks = await getFullChunksForDate(dataKey);
+                        const currentTotal = chunks.reduce((sum, item) => sum + item.duration, 0);
+                        if (currentTotal < MAX_RECORD_TIME) {
+                            openCameraScreen(boxYear, boxMonth, boxDate);
+                            return;
+                        }
                     }
                     
-                    // 20秒撮りきっている場合のみ再生へ
                     if (recordedData[dataKey]) { 
                         startPlayback([dataKey]); 
                         return; 
+                    }
+                    
+                    if (!isToday) { 
+                        if (currentDate > todayResetObj) alert('まだその日は来ていません。未来の記録を楽しみにお待ちください。'); 
+                        else alert('過去の日は撮影できません。日々の記録は当日のみ可能です。'); 
                     }
                 };
                 
@@ -628,8 +645,8 @@
             });
             const recordedCount = validKeys.length;
 
-            // ★テスト用制限解除：isViewable を強制的に true にして常に書き出しボタンを解放
-            const isViewable = true;
+            // ★テスト用制限解除：isViewable を強制的に true
+            const isViewable = isLastDayRecorded || isWeekOver;
 
             const ticket = document.createElement('div'); ticket.className = 'ticket';
             if (!isViewable) ticket.classList.add('locked');
@@ -785,7 +802,7 @@
             renderCalendarAndTickets(); initMonthScreen();
         };
 
-        /* === 6. 再生画面 === */
+        /* === 6. 再生画面（爆速ストリーミング対応版） === */
         let playlistUrls = [];
         let currentPlayIndex = 0;
 
@@ -808,7 +825,6 @@
             if (currentPlayIndex >= playlistUrls.length) { closePlaybackScreen(); return; }
             const currentItem = playlistUrls[currentPlayIndex];
             
-            // ★変更箇所：数字（- 1/5 など）を消去し、WEEKLY MOVIE のみに統一
             if (playlistUrls.length > 1) playbackDateDisplay.textContent = `WEEKLY MOVIE`;
             else { const parts = currentItem.key.split('-'); playbackDateDisplay.textContent = `${monthNames[parseInt(parts[1])-1].substring(0,3)} ${parts[2]} - PLAY`; }
 
@@ -870,7 +886,7 @@
                 dummyOsc.connect(dummyGain); dummyGain.connect(dest); dummyOsc.start();
                 const source = audioCtx.createMediaElementSource(exportVideo);
                 source.connect(dest);
-            } catch(e) { console.log("AudioContext Error:", e); }
+            } catch(e) { console.log("AudioContext Error"); }
 
             const exportStream = exportCanvas.captureStream(30);
             if (dest) dest.stream.getAudioTracks().forEach(t => exportStream.addTrack(t));
