@@ -206,14 +206,11 @@
         #export-download-link { text-decoration: none; display: inline-block; margin-bottom: 0; }
         #export-screen .finish-btn { width: 260px; box-sizing: border-box; margin: 6px 0; text-align: center; white-space: nowrap; padding: 15px 20px; }
 
-        #record-canvas { position: absolute; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
-
     </style>
 </head>
 <body>
 
     <div id="app">
-        <!-- 1. 月選択画面 -->
         <div id="month-screen">
             <div class="month-screen-header">YEAR <span id="current-year-display"></span></div>
             <div id="month-list"></div>
@@ -222,7 +219,6 @@
             </div>
         </div>
 
-        <!-- 2. ホーム画面 -->
         <div id="home-screen">
             <header class="home-header">
                 <button class="back-btn" id="month-back-btn">&lt; BACK</button>
@@ -238,7 +234,6 @@
             </div>
         </div>
 
-        <!-- 3. 撮影画面 -->
         <div id="camera-screen">
             <header class="camera-header">
                 <button class="back-btn" id="camera-back-btn">&lt; BACK</button>
@@ -255,14 +250,12 @@
             <div class="controls"><button id="record-btn" disabled></button></div>
         </div>
 
-        <!-- 4. CUT画面 -->
         <div id="finish-screen">
             <div class="finish-title">CUT.</div>
             <div class="finish-desc">今日の記録をフィルムに焼き付けました</div>
             <button class="finish-btn" id="finish-ok-btn">RETURN</button>
         </div>
 
-        <!-- 5. 再生画面 -->
         <div id="playback-screen">
             <header class="camera-header">
                 <button class="back-btn" id="playback-back-btn">&lt; BACK</button>
@@ -276,7 +269,6 @@
             </div>
         </div>
 
-        <!-- 6. 設定画面 -->
         <div id="settings-screen">
             <div class="settings-title">APP FONT</div>
             <div id="font-select-container"></div>
@@ -294,7 +286,6 @@
             <button id="reset-db-btn" style="margin-top:40px; background:none; border:1px solid #444; color:#666; padding:5px 10px; font-size:10px; border-radius:10px;">RESET ALL DATA</button>
         </div>
 
-        <!-- 7. 書き出し画面 -->
         <div id="export-screen">
             <div class="finish-title" id="export-title">EXPORTING...</div>
             <div class="finish-desc" id="export-desc">1週間分のフィルムを現像しています<br>画面を閉じずにお待ちください</div>
@@ -304,6 +295,7 @@
             <button class="finish-btn" id="export-return-btn" style="display: none;">RETURN</button>
         </div>
 
+        <canvas id="record-canvas"></canvas>
     </div>
 
     <script>
@@ -601,23 +593,20 @@
                 const dayText = document.createElement('span'); dayText.textContent = boxDate; dayBox.appendChild(dayText);
                 
                 dayBox.onclick = async () => {
-                    if (isToday) {
-                        const chunks = await getFullChunksForDate(dataKey);
-                        const currentTotal = chunks.reduce((sum, item) => sum + item.duration, 0);
-                        if (currentTotal < MAX_RECORD_TIME) {
-                            openCameraScreen(boxYear, boxMonth, boxDate);
-                            return;
-                        }
+                    // ★テスト用制限解除：当日以外でも秒数チェックし、20秒未満ならカメラを開く
+                    const chunks = await getFullChunksForDate(dataKey);
+                    const currentTotal = chunks.reduce((sum, item) => sum + item.duration, 0);
+                    
+                    // 20秒未満なら撮影（再開）へ
+                    if (currentTotal < MAX_RECORD_TIME) {
+                        openCameraScreen(boxYear, boxMonth, boxDate);
+                        return;
                     }
                     
+                    // 20秒撮りきっている場合のみ再生へ
                     if (recordedData[dataKey]) { 
                         startPlayback([dataKey]); 
                         return; 
-                    }
-                    
-                    if (!isToday) { 
-                        if (currentDate > todayResetObj) alert('まだその日は来ていません。未来の記録を楽しみにお待ちください。'); 
-                        else alert('過去の日は撮影できません。日々の記録は当日のみ可能です。'); 
                     }
                 };
                 
@@ -639,8 +628,8 @@
             });
             const recordedCount = validKeys.length;
 
-            const lastDateKey = `${endDay.getFullYear()}-${endDay.getMonth() + 1}-${endDay.getDate()}`;
-            const isLastDayRecorded = !!recordedData[lastDateKey]; const isWeekOver = todayResetObj > endDay; const isViewable = isLastDayRecorded || isWeekOver;
+            // ★テスト用制限解除：isViewable を強制的に true にして常に書き出しボタンを解放
+            const isViewable = true;
 
             const ticket = document.createElement('div'); ticket.className = 'ticket';
             if (!isViewable) ticket.classList.add('locked');
@@ -796,7 +785,7 @@
             renderCalendarAndTickets(); initMonthScreen();
         };
 
-        /* === 6. 再生画面（爆速ストリーミング対応版） === */
+        /* === 6. 再生画面 === */
         let playlistUrls = [];
         let currentPlayIndex = 0;
 
@@ -819,19 +808,18 @@
             if (currentPlayIndex >= playlistUrls.length) { closePlaybackScreen(); return; }
             const currentItem = playlistUrls[currentPlayIndex];
             
-            if (playlistUrls.length > 1) playbackDateDisplay.textContent = `WEEKLY MOVIE - ${currentPlayIndex + 1}/${playlistUrls.length}`;
+            // ★変更箇所：数字（- 1/5 など）を消去し、WEEKLY MOVIE のみに統一
+            if (playlistUrls.length > 1) playbackDateDisplay.textContent = `WEEKLY MOVIE`;
             else { const parts = currentItem.key.split('-'); playbackDateDisplay.textContent = `${monthNames[parseInt(parts[1])-1].substring(0,3)} ${parts[2]} - PLAY`; }
 
             if (showWatermark) { playbackWatermark.textContent = currentItem.dateStr; playbackWatermark.style.display = 'block'; } 
             else { playbackWatermark.style.display = 'none'; }
 
-            // ★修正：事前読み込み（load()）を削除し、再生が始まった瞬間に画面を表示する
             playbackLoading.style.display = 'block';
             playbackView.style.opacity = '0';
             
             playbackView.src = currentItem.url;
             
-            // oncanplayではなく、確実に再生が始まった合図（onplaying）で黒幕を消す
             playbackView.onplaying = () => {
                 playbackLoading.style.display = 'none';
                 playbackView.style.opacity = '1';
@@ -882,7 +870,7 @@
                 dummyOsc.connect(dummyGain); dummyGain.connect(dest); dummyOsc.start();
                 const source = audioCtx.createMediaElementSource(exportVideo);
                 source.connect(dest);
-            } catch(e) { console.log("AudioContext Error"); }
+            } catch(e) { console.log("AudioContext Error:", e); }
 
             const exportStream = exportCanvas.captureStream(30);
             if (dest) dest.stream.getAudioTracks().forEach(t => exportStream.addTrack(t));
