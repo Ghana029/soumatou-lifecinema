@@ -12,7 +12,6 @@
 
     <style>
         :root {
-            /* ★初期フォントはJS側でFuturaにセットされます */
             --app-font: Futura, 'Century Gothic', 'Noto Sans JP', sans-serif;
         }
 
@@ -114,9 +113,9 @@
 
         .action-btns { display: flex; gap: 10px; }
         .ticket-action-btn { 
-            background: none; border: 1px solid #111; color: #111; font-size: 12px; 
+            background: none; border: 1px solid #111; color: #111; font-size: 14px; 
             cursor: pointer; border-radius: 4px; padding: 6px 12px; transition: 0.2s;
-            -webkit-tap-highlight-color: transparent; display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
         }
         .ticket-action-btn:hover { background-color: #111; color: #f4ebd0; }
 
@@ -174,7 +173,6 @@
         .settings-title { font-size: 16px; letter-spacing: 4px; color: #f4ebd0; margin-bottom: 20px; margin-top: 30px; }
         .month-select-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 80%; margin-bottom: 20px; }
         
-        /* ★修正：フォント選択を4列のグリッドに統一（横一列） */
         #font-select-container {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -185,7 +183,7 @@
         }
         #font-select-container .month-opt-btn {
             padding: 10px 0;
-            font-size: 11px; /* 1列に収めるために少し小さく */
+            font-size: 11px; 
             text-align: center;
         }
 
@@ -238,6 +236,7 @@
 <body>
 
     <div id="app">
+        <!-- 1. 月選択画面 -->
         <div id="month-screen">
             <div class="month-screen-header">YEAR <span id="current-year-display"></span></div>
             <div id="month-list"></div>
@@ -246,6 +245,7 @@
             </div>
         </div>
 
+        <!-- 2. ホーム画面 -->
         <div id="home-screen">
             <header class="home-header">
                 <button class="back-btn" id="month-back-btn">&lt; BACK</button>
@@ -261,6 +261,7 @@
             </div>
         </div>
 
+        <!-- 3. 撮影画面 -->
         <div id="camera-screen">
             <header class="camera-header">
                 <button class="back-btn" id="camera-back-btn">&lt; BACK</button>
@@ -277,12 +278,14 @@
             <div class="controls"><button id="record-btn"></button></div>
         </div>
 
+        <!-- 4. CUT画面 -->
         <div id="finish-screen">
             <div class="finish-title">CUT.</div>
             <div class="finish-desc">今日の記録をフィルムに焼き付けました</div>
             <button class="finish-btn" id="finish-ok-btn">RETURN</button>
         </div>
 
+        <!-- 5. 再生画面 -->
         <div id="playback-screen">
             <header class="camera-header">
                 <button class="back-btn" id="playback-back-btn">&lt; BACK</button>
@@ -295,6 +298,7 @@
             </div>
         </div>
 
+        <!-- 6. 設定画面 -->
         <div id="settings-screen">
             <div class="settings-title">APP FONT</div>
             <div id="font-select-container"></div>
@@ -312,6 +316,7 @@
             <button id="reset-db-btn" style="margin-top:40px; background:none; border:1px solid #444; color:#666; padding:5px 10px; font-size:10px; border-radius:10px;">RESET ALL DATA</button>
         </div>
 
+        <!-- 7. 書き出し画面 -->
         <div id="export-screen">
             <div class="finish-title" id="export-title" style="font-size:24px;">EXPORTING...</div>
             <div class="finish-desc" id="export-desc">1週間分のフィルムを現像しています<br>画面を閉じずにお待ちください</div>
@@ -330,7 +335,6 @@
         /* =========================================
            1. 設定データの読み込みと初期化
         ========================================= */
-        // ★修正：Futuraを先頭に。Monospaceを排除し、Didot, Serif, Sansの4つに厳選
         const fontOptions = [
             { label: 'Futura', value: "Futura, 'Century Gothic', 'Noto Sans JP', sans-serif" },
             { label: 'Didot', value: "Didot, 'Bodoni MT', 'Noto Serif JP', serif" },
@@ -468,7 +472,7 @@
                 await initDB();
                 const keys = await getAllRecordedKeys();
                 keys.forEach(key => { recordedData[key] = true; });
-            } catch (err) { console.warn("DBエラー"); }
+            } catch (err) {}
             initMonthScreen();
             buildSettingsUI();
         }
@@ -503,7 +507,11 @@
                 let targetMonthNum = monthSequence[index]; let targetYearForCard = viewYear; if (targetMonthNum < appStartMonth) targetYearForCard = viewYear + 1;
                 if (Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`))) card.classList.add('has-data');
 
-                if (index === activeMonthIndex) card.classList.add('active');
+                if (index === activeMonthIndex) {
+                    card.classList.add('active');
+                    // ★画面上部のYEAR表示をフォーカスされたカードの年に自動で合わせる
+                    document.getElementById('current-year-display').textContent = targetYearForCard;
+                }
                 else if (index === activeMonthIndex - 1) card.classList.add('prev');
                 else if (index === activeMonthIndex + 1) card.classList.add('next');
                 else if (index < activeMonthIndex - 1) card.classList.add('hidden-prev');
@@ -636,12 +644,12 @@
             const ticket = document.createElement('div'); ticket.className = 'ticket';
             if (!isViewable) ticket.classList.add('locked');
 
-            // ★絵文字を記号（▶ と ▼ と ×）に統一
+            // ★絵文字を記号（▶ と ▼ と -）に統一
             ticket.innerHTML = `
                 <div class="ticket-info"><div class="ticket-week">WEEK ${weekNum}</div><div class="ticket-dates">${dateLabel}</div></div>
                 <div class="ticket-play">
                     ${recordedCount > 0 && isViewable ? `<span class="record-badge">${recordedCount} REC</span>` : ''}
-                    ${isViewable && recordedCount > 0 ? `<div class="action-btns"><button class="ticket-action-btn play-btn">▶</button><button class="ticket-action-btn save-btn">▼</button></div>` : (isViewable ? '▶' : '×')}
+                    ${isViewable && recordedCount > 0 ? `<div class="action-btns"><button class="ticket-action-btn play-btn">▶</button><button class="ticket-action-btn save-btn">▼</button></div>` : (isViewable ? '▶' : '-')}
                 </div>
             `;
             
@@ -650,11 +658,8 @@
                 playBtn.onclick = (e) => { e.stopPropagation(); startPlayback(validKeys); };
                 saveBtn.onclick = (e) => { e.stopPropagation(); startExport(validKeys, dateLabel); };
                 ticket.onclick = () => { startPlayback(validKeys); };
-            } else if (isViewable && recordedCount === 0) {
-                ticket.onclick = () => alert('この週には記録がありません。');
-            } else {
-                ticket.onclick = () => alert('この週の振り返りは、週末の記録を終えるか、次の週になるまでのお楽しみです。');
-            }
+            } else if (isViewable && recordedCount === 0) { ticket.onclick = () => alert('この週には記録がありません。');
+            } else { ticket.onclick = () => alert('この週の振り返りは、週末の記録を終えるか、次の週になるまでのお楽しみです。'); }
             ticketsArea.appendChild(ticket);
         }
 
@@ -831,7 +836,6 @@
                         if (vw / vh > 16 / 9) { sHeight = vh; sWidth = vh * (16 / 9); sx = (vw - sWidth) / 2; sy = 0; }
                         exportCanvasCtx.drawImage(exportVideo, sx, sy, sWidth, sHeight, 0, 0, exportCanvas.width, exportCanvas.height);
                         
-                        // ★日付を小さく、右下へ配置（Canvas側は34pxに計算）
                         if (showWatermark && exportDateStr) {
                             exportCanvasCtx.fillStyle = "rgba(244, 235, 208, 0.35)";
                             exportCanvasCtx.font = `normal 34px ${appFont}`;
