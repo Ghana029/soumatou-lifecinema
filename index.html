@@ -181,7 +181,11 @@
             max-width: 360px;
             margin-bottom: 20px;
         }
-        #font-select-container .month-opt-btn { padding: 10px 0; font-size: 11px; text-align: center; }
+        #font-select-container .month-opt-btn {
+            padding: 10px 0;
+            font-size: 11px; 
+            text-align: center;
+        }
 
         .settings-grid {
             display: grid;
@@ -191,7 +195,10 @@
             max-width: 320px;
             margin-bottom: 20px;
         }
-        .settings-grid .month-opt-btn { padding: 12px 0; text-align: center; }
+        .settings-grid .month-opt-btn {
+            padding: 12px 0;
+            text-align: center;
+        }
 
         .month-opt-btn { background-color: #222; border: 1px solid #444; color: #888; padding: 10px 15px; font-size: 14px; border-radius: 4px; cursor: pointer; transition: 0.2s; -webkit-tap-highlight-color: transparent; }
         .month-opt-btn.selected { background-color: #b22222; color: #f4ebd0; border-color: #f4ebd0; }
@@ -213,7 +220,14 @@
         #export-progress-bar { height: 100%; width: 0%; background-color: #f4ebd0; transition: width 0.3s; }
         
         #export-download-link { text-decoration: none; display: inline-block; margin-bottom: 0; }
-        #export-screen .finish-btn { width: 260px; box-sizing: border-box; margin: 6px 0; text-align: center; white-space: nowrap; padding: 15px 20px; }
+        #export-screen .finish-btn {
+            width: 260px;
+            box-sizing: border-box;
+            margin: 6px 0;
+            text-align: center;
+            white-space: nowrap;
+            padding: 15px 20px;
+        }
 
         #record-canvas { position: absolute; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
 
@@ -222,6 +236,7 @@
 <body>
 
     <div id="app">
+        <!-- 1. 月選択画面 -->
         <div id="month-screen">
             <div class="month-screen-header">YEAR <span id="current-year-display"></span></div>
             <div id="month-list"></div>
@@ -230,6 +245,7 @@
             </div>
         </div>
 
+        <!-- 2. ホーム画面 -->
         <div id="home-screen">
             <header class="home-header">
                 <button class="back-btn" id="month-back-btn">&lt; BACK</button>
@@ -245,6 +261,7 @@
             </div>
         </div>
 
+        <!-- 3. 撮影画面 -->
         <div id="camera-screen">
             <header class="camera-header">
                 <button class="back-btn" id="camera-back-btn">&lt; BACK</button>
@@ -261,12 +278,14 @@
             <div class="controls"><button id="record-btn"></button></div>
         </div>
 
+        <!-- 4. CUT画面 -->
         <div id="finish-screen">
             <div class="finish-title">CUT.</div>
             <div class="finish-desc">今日の記録をフィルムに焼き付けました</div>
             <button class="finish-btn" id="finish-ok-btn">RETURN</button>
         </div>
 
+        <!-- 5. 再生画面 -->
         <div id="playback-screen">
             <header class="camera-header">
                 <button class="back-btn" id="playback-back-btn">&lt; BACK</button>
@@ -279,6 +298,7 @@
             </div>
         </div>
 
+        <!-- 6. 設定画面 -->
         <div id="settings-screen">
             <div class="settings-title">APP FONT</div>
             <div id="font-select-container"></div>
@@ -296,8 +316,9 @@
             <button id="reset-db-btn" style="margin-top:40px; background:none; border:1px solid #444; color:#666; padding:5px 10px; font-size:10px; border-radius:10px;">RESET ALL DATA</button>
         </div>
 
+        <!-- 7. 書き出し画面 -->
         <div id="export-screen">
-            <div class="finish-title" id="export-title" style="font-size:24px;">EXPORTING...</div>
+            <div class="finish-title" id="export-title">EXPORTING...</div>
             <div class="finish-desc" id="export-desc">1週間分のフィルムを現像しています<br>画面を閉じずにお待ちください</div>
             
             <canvas id="export-canvas" width='1280' height='720'></canvas>
@@ -335,9 +356,9 @@
         document.documentElement.style.setProperty('--app-font', appFont);
 
         /* =========================================
-           2. データベース操作 & 互換性確保
+           2. データベース操作
         ========================================= */
-        const dbName = 'OneYearInTwoHoursDB_v7';
+        const dbName = 'OneYearInTwoHoursDB_v8';
         const storeName = 'videos';
         let db = null;
 
@@ -394,7 +415,6 @@
             }
         };
 
-        // データの互換性対応（単一動画か断片配列かを吸収）
         async function getFullChunksForDate(key) {
             try {
                 const result = await getVideoFromDB(key);
@@ -602,11 +622,31 @@
 
                 const dayText = document.createElement('span'); dayText.textContent = boxDate; dayBox.appendChild(dayText);
                 
-                dayBox.onclick = () => {
-                    if (recordedData[dataKey]) { startPlayback([dataKey]); return; }
+                // ★修正：タップした時の「再生判定」と「カメラ再開判定」を完璧に分離
+                dayBox.onclick = async () => {
+                    if (isToday) {
+                        // 当日の場合、まず現在どれだけ録画されているか秒数をチェック
+                        const chunks = await getFullChunksForDate(dataKey);
+                        const currentTotal = chunks.reduce((sum, item) => sum + item.duration, 0);
+                        
+                        // 20秒（20000ms）に達していなければ、データがあってもカメラ（再開）を開く
+                        if (currentTotal < MAX_RECORD_TIME) {
+                            openCameraScreen(boxYear, boxMonth, boxDate);
+                            return;
+                        }
+                    }
                     
-                    if (isToday) { openCameraScreen(boxYear, boxMonth, boxDate); } 
-                    else { if (currentDate > todayResetObj) alert('まだその日は来ていません。未来の記録を楽しみにお待ちください。'); else alert('過去の日は撮影できません。日々の記録は当日のみ可能です。'); }
+                    // 当日ではない、または既に20秒撮りきっている場合は再生へ
+                    if (recordedData[dataKey]) { 
+                        startPlayback([dataKey]); 
+                        return; 
+                    }
+                    
+                    // 未来・過去のエラー表示
+                    if (!isToday) { 
+                        if (currentDate > todayResetObj) alert('まだその日は来ていません。未来の記録を楽しみにお待ちください。'); 
+                        else alert('過去の日は撮影できません。日々の記録は当日のみ可能です。'); 
+                    }
                 };
                 
                 calendarElement.appendChild(dayBox); weekDatesArray.push(new Date(currentDate));
@@ -646,19 +686,17 @@
                 playBtn.onclick = (e) => { e.stopPropagation(); startPlayback(validKeys); };
                 saveBtn.onclick = (e) => { e.stopPropagation(); startExport(validKeys, dateLabel); };
                 ticket.onclick = () => { startPlayback(validKeys); };
-            } else if (isViewable && recordedCount === 0) {
-                ticket.onclick = () => alert('この週には記録がありません。');
-            } else {
-                ticket.onclick = () => alert('この週の振り返りは、週末の記録を終えるか、次の週になるまでのお楽しみです。');
-            }
+            } else if (isViewable && recordedCount === 0) { ticket.onclick = () => alert('この週には記録がありません。');
+            } else { ticket.onclick = () => alert('この週の振り返りは、週末の記録を終えるか、次の週になるまでのお楽しみです。'); }
             ticketsArea.appendChild(ticket);
         }
 
-        /* === 5. 撮影システム（コマ撮り・自動セーブ完全対応版） === */
+        /* === 5. 撮影システム === */
         let isRecording = false; let totalRecordTime = 0; let timerInterval; let mediaRecorder; let recordedChunks = [];
         const MAX_RECORD_TIME = 20000;
         let currentExistingChunks = []; 
         let segmentStartTime = 0;
+        let cameraStream = null;
 
         async function openCameraScreen(y, m, d) {
             recordTargetYear = y; recordTargetMonth = m; recordTargetDay = d;
@@ -670,64 +708,51 @@
             else { cameraWatermark.style.display = 'none'; }
 
             homeScreen.style.display = 'none'; cameraScreen.style.display = 'flex';
-            recordBtn.disabled = false; recordBtn.classList.remove('recording');
+            recordBtn.disabled = true; // カメラの準備が整うまでロック
+            recordBtn.classList.remove('recording');
             isRecording = false;
 
-            // ★起動時に既存の断片データをすべてロードして進行状況を復元する
             currentExistingChunks = await getFullChunksForDate(dataKey);
             totalRecordTime = currentExistingChunks.reduce((sum, item) => sum + item.duration, 0);
             
             progressBar.style.width = (totalRecordTime / MAX_RECORD_TIME) * 100 + '%';
             recordTimer.textContent = `00:${Math.floor(totalRecordTime / 1000).toString().padStart(2, '0')} / 00:20`;
 
-            // すでに20秒撮りきっている場合は録画ボタンを無効化
-            if (totalRecordTime >= MAX_RECORD_TIME) {
-                alert("この日の記録（20秒）はすでに完了しています。");
-                recordBtn.disabled = true;
-            }
-
-            startCamera(); // ここではプレビューのみ表示
+            startCamera(); 
         }
 
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { aspectRatio: 16/9, facingMode: "environment" }, audio: true });
                 cameraView.srcObject = stream;
+                cameraStream = stream;
+                
+                if (totalRecordTime < MAX_RECORD_TIME) {
+                    recordBtn.disabled = false;
+                }
             } catch (err) { alert("カメラの起動に失敗しました。"); }
         }
 
-        function stopCamera() { if (cameraView.srcObject) cameraView.srcObject.getTracks().forEach(t => t.stop()); }
+        function stopCamera() { 
+            if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+            if (cameraView.srcObject) cameraView.srcObject = null;
+        }
 
-        recordBtn.onclick = function() {
-            if (!cameraView.srcObject) return;
-
-            if (isRecording) {
-                // 【一時停止】録画をストップ（この瞬間にonstopが走りDBへ保存される）
-                isRecording = false; 
-                recordBtn.classList.remove('recording'); 
-                clearInterval(timerInterval);
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); 
-            } else {
-                // 【録画開始・再開】毎回新しい録画機を作って記録する
-                if (totalRecordTime >= MAX_RECORD_TIME) return;
-                isRecording = true; 
-                recordBtn.classList.add('recording');
-                recordedChunks = [];
-                segmentStartTime = Date.now();
-                
-                mediaRecorder = new MediaRecorder(cameraView.srcObject);
-                mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunks.push(event.data); };
-                
+        // ★新規：データベースへの書き込み完了を完全に保証する非同期関数
+        function stopRecordingAndSave() {
+            return new Promise((resolve) => {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    resolve();
+                    return;
+                }
                 mediaRecorder.onstop = async () => {
                     const mimeType = mediaRecorder.mimeType || (recordedChunks[0] && recordedChunks[0].type) || '';
                     const blob = new Blob(recordedChunks, { type: mimeType }); 
                     
-                    // 今回撮影した秒数を計算（20秒をオーバーしないようにキャップをかける）
                     const currentSegmentDuration = Date.now() - segmentStartTime;
                     const durationToAdd = Math.min(currentSegmentDuration, MAX_RECORD_TIME - totalRecordTime);
                     
-                    // 誤タップのノイズ防止（0.2秒以上なら保存）
-                    if (durationToAdd > 200 || durationToAdd === MAX_RECORD_TIME - totalRecordTime) { 
+                    if (durationToAdd > 150) { // 誤タップ防止
                         currentExistingChunks.push({ blob: blob, duration: durationToAdd });
                         totalRecordTime += durationToAdd;
                         const dataKey = `${recordTargetYear}-${recordTargetMonth}-${recordTargetDay}`;
@@ -736,27 +761,56 @@
                             recordedData[dataKey] = true; 
                         } catch(e) { console.error("保存失敗", e); }
                     }
-
-                    // 合計が20秒に達したら完了画面へ
-                    if (totalRecordTime >= MAX_RECORD_TIME) {
-                        stopCamera();
-                        cameraScreen.style.display = 'none';
-                        finishScreen.style.display = 'flex';
-                    }
+                    resolve();
                 };
+                mediaRecorder.stop();
+            });
+        }
+
+        recordBtn.onclick = async function() {
+            if (!cameraStream) return;
+            recordBtn.disabled = true; // 処理中はボタンをロック
+
+            if (isRecording) {
+                // 一時停止（DBへの保存処理を確実に待つ）
+                isRecording = false; 
+                recordBtn.classList.remove('recording'); 
+                clearInterval(timerInterval);
                 
+                await stopRecordingAndSave(); 
+                
+                progressBar.style.width = (totalRecordTime / MAX_RECORD_TIME) * 100 + '%';
+                recordTimer.textContent = `00:${Math.floor(totalRecordTime / 1000).toString().padStart(2, '0')} / 00:20`;
+                
+                if (totalRecordTime >= MAX_RECORD_TIME) {
+                    stopCamera();
+                    cameraScreen.style.display = 'none';
+                    finishScreen.style.display = 'flex';
+                } else {
+                    recordBtn.disabled = false; // まだ余りがあればボタンを解放
+                }
+            } else {
+                // 録画開始
+                if (totalRecordTime >= MAX_RECORD_TIME) return;
+                isRecording = true; 
+                recordBtn.classList.add('recording');
+                recordedChunks = [];
+                segmentStartTime = Date.now();
+                
+                mediaRecorder = new MediaRecorder(cameraStream);
+                mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunks.push(event.data); };
                 mediaRecorder.start(200);
+                recordBtn.disabled = false;
 
                 timerInterval = setInterval(() => {
-                    // 表示用の時間は「前回の合計 ＋ 今録画している時間」
                     const displayTime = totalRecordTime + (Date.now() - segmentStartTime);
                     progressBar.style.width = (displayTime / MAX_RECORD_TIME) * 100 + '%';
                     recordTimer.textContent = `00:${Math.floor(displayTime / 1000).toString().padStart(2, '0')} / 00:20`;
                     
-                    // 20秒に達したら自動でストップをかける
+                    // 20秒到達で自動ストップ（停止ボタンを押したのと同じルートを通す）
                     if (displayTime >= MAX_RECORD_TIME) {
-                        isRecording = false; recordBtn.classList.remove('recording'); clearInterval(timerInterval); recordBtn.disabled = true;
-                        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                        clearInterval(timerInterval);
+                        recordBtn.click(); 
                     }
                 }, 100);
             }
@@ -767,18 +821,16 @@
             renderCalendarAndTickets(); initMonthScreen();
         };
 
-        /* === 6. 再生画面（断片動画のシームレス連結） === */
+        /* === 6. 再生画面 === */
         let playlistUrls = [];
         let currentPlayIndex = 0;
 
         async function startPlayback(keys) {
             playlistUrls = [];
             for (let key of keys) {
-                // 1日の中に複数あるかもしれない動画断片をすべて展開する
                 const chunks = await getFullChunksForDate(key);
                 const parts = key.split('-');
                 const formattedDate = `${parts[0]}.${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
-                
                 chunks.forEach(item => {
                     playlistUrls.push({ key: key, dateStr: formattedDate, url: URL.createObjectURL(item.blob) });
                 });
@@ -855,7 +907,6 @@
             const exportChunks = [];
             exportRecorder.ondataavailable = e => { if(e.data.size > 0) exportChunks.push(e.data); };
 
-            // すべての断片動画を1つのフラットなキューに展開
             let allExportItems = [];
             for (let key of keys) {
                 const chunks = await getFullChunksForDate(key);
@@ -948,13 +999,12 @@
         };
 
         /* --- ナビゲーション --- */
-        // ★修正：「< BACK」での画面遷移時にも撮影中のセグメントを自動で強制保存（クローズド・ガード）
-        document.getElementById('camera-back-btn').onclick = () => { 
+        // ★修正：「< BACK」での画面遷移時にも完全同期セーブでデータ破壊を防ぐ
+        document.getElementById('camera-back-btn').onclick = async () => { 
+            recordBtn.disabled = true; 
             if (isRecording) {
                 isRecording = false; recordBtn.classList.remove('recording'); clearInterval(timerInterval);
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop(); // ここで自動的にonstopが走り、現在のセグメントがDBへ書き込まれます
-                }
+                await stopRecordingAndSave(); 
             }
             stopCamera(); 
             cameraScreen.style.display = 'none'; 
