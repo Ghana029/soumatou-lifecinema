@@ -63,7 +63,7 @@
             background-color: #222; border: 2px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center;
             transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 15px 35px rgba(0,0,0,0.8); cursor: pointer; opacity: 0; transform: translateY(0); pointer-events: none; z-index: 0;
         }
-        .month-card.active { transform: translateY(0); opacity: 1; z-index: 10; border-color: #f4ebd0; pointer-events: auto; filter: blur(0px) brightness(1); }
+        .month-card.active { transform: translateY(0); opacity: 1; z-index: 10; border-color: #f4ebd0; pointer-events: auto; filter: blur(0px) brightness(1); pointer-events: auto; }
         .month-card.prev { transform: translateY(-60%); opacity: 0.85; z-index: 5; pointer-events: auto; filter: blur(1px) brightness(0.75); }
         .month-card.next { transform: translateY(60%); opacity: 0.85; z-index: 5; pointer-events: auto; filter: blur(1px) brightness(0.75); }
         .month-card.hidden-prev { transform: translateY(-120%); opacity: 0; }
@@ -181,7 +181,11 @@
             max-width: 360px;
             margin-bottom: 20px;
         }
-        #font-select-container .month-opt-btn { padding: 10px 0; font-size: 11px; text-align: center; }
+        #font-select-container .month-opt-btn {
+            padding: 10px 0;
+            font-size: 11px; 
+            text-align: center;
+        }
 
         .settings-grid {
             display: grid;
@@ -191,7 +195,10 @@
             max-width: 320px;
             margin-bottom: 20px;
         }
-        .settings-grid .month-opt-btn { padding: 12px 0; text-align: center; }
+        .settings-grid .month-opt-btn {
+            padding: 12px 0;
+            text-align: center;
+        }
 
         .month-opt-btn { background-color: #222; border: 1px solid #444; color: #888; padding: 10px 15px; font-size: 14px; border-radius: 4px; cursor: pointer; transition: 0.2s; -webkit-tap-highlight-color: transparent; }
         .month-opt-btn.selected { background-color: #b22222; color: #f4ebd0; border-color: #f4ebd0; }
@@ -213,7 +220,14 @@
         #export-progress-bar { height: 100%; width: 0%; background-color: #f4ebd0; transition: width 0.3s; }
         
         #export-download-link { text-decoration: none; display: inline-block; margin-bottom: 0; }
-        #export-screen .finish-btn { width: 260px; box-sizing: border-box; margin: 6px 0; text-align: center; white-space: nowrap; padding: 15px 20px; }
+        #export-screen .finish-btn {
+            width: 260px;
+            box-sizing: border-box;
+            margin: 6px 0;
+            text-align: center;
+            white-space: nowrap;
+            padding: 15px 20px;
+        }
 
         #record-canvas { position: absolute; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
 
@@ -339,7 +353,8 @@
         /* =========================================
            2. データベース操作
         ========================================= */
-        const dbName = 'OneYearInTwoHoursDB_v7'; // アーキテクチャ変更に伴いDBをアップデート
+        // データ蓄積ロジック刷新のためバージョンを v7 へアップデート
+        const dbName = 'OneYearInTwoHoursDB_v7';
         const storeName = 'videos';
         let db = null;
 
@@ -396,7 +411,7 @@
             }
         };
 
-        // ★追加：データ構造の互換性を担保するヘルパー関数
+        // 配列構造と単一Blob構造を安全に判別・正規化するヘルパー
         async function getFullChunksForDate(key) {
             try {
                 const result = await getVideoFromDB(key);
@@ -470,7 +485,7 @@
                 await initDB();
                 const keys = await getAllRecordedKeys();
                 keys.forEach(key => { recordedData[key] = true; });
-            } catch (err) { console.warn("DBエラー"); }
+            } catch (err) {}
             initMonthScreen();
             buildSettingsUI();
         }
@@ -654,10 +669,10 @@
             ticketsArea.appendChild(ticket);
         }
 
-        /* === 5. 撮影システム（コマ撮り・一時停止再開仕様） === */
+        /* === 5. 撮影システム（断片追記セーブ・状態復元機構） === */
         let isRecording = false; let totalRecordTime = 0; let timerInterval; let mediaRecorder; let recordedChunks = [];
         const MAX_RECORD_TIME = 20000;
-        let currentExistingChunks = []; // その日の既存のフィルム断片
+        let currentExistingChunks = []; 
         let segmentStartTime = 0;
 
         async function openCameraScreen(y, m, d) {
@@ -673,7 +688,7 @@
             recordBtn.disabled = false; recordBtn.classList.remove('recording');
             isRecording = false;
 
-            // ★既存の撮影断片データを即座にロードして進捗を復元
+            // ★起動時にこれまでの撮影履歴断片を IndexedDB からロードしてタイムラインを完全復元
             currentExistingChunks = await getFullChunksForDate(dataKey);
             totalRecordTime = currentExistingChunks.reduce((sum, item) => sum + item.duration, 0);
             
@@ -696,7 +711,7 @@
                 mediaRecorder = new MediaRecorder(stream);
                 mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunks.push(event.data); };
                 
-                // ★断片の撮影がストップした瞬間に即座にデータベースへ書き込み
+                // ★撮影ストップ（一時停止・画面遷移）した瞬間に、その動画断片をデータベースへ即座に永続化
                 mediaRecorder.onstop = async () => {
                     const mimeType = mediaRecorder.mimeType || (recordedChunks[0] && recordedChunks[0].type) || '';
                     const blob = new Blob(recordedChunks, { type: mimeType }); 
@@ -704,17 +719,16 @@
                     const previousDuration = currentExistingChunks.reduce((sum, item) => sum + item.duration, 0);
                     const duration = Math.min(Date.now() - segmentStartTime, MAX_RECORD_TIME - previousDuration);
                     
-                    if (duration > 200) { // 誤タップ等による極小ノイズデータをガード
+                    if (duration > 200) { // 誤タップ等による極短ノイズデータをガード
                         currentExistingChunks.push({ blob: blob, duration: duration });
                         const dataKey = `${recordTargetYear}-${recordTargetMonth}-${recordTargetDay}`;
                         try { 
                             await saveVideoToDB(dataKey, currentExistingChunks); 
                             recordedData[dataKey] = true; 
-                        } 
-                        catch(e) { console.error("保存失敗", e); }
+                        } catch(e) { console.error("ストレージ追記失敗", e); }
                     }
 
-                    // ★20秒撮りきったら自動的に「CUT.」画面へ
+                    // 20秒に到達した場合は「CUT.」へ移行
                     const finalTotal = currentExistingChunks.reduce((sum, item) => sum + item.duration, 0);
                     if (finalTotal >= MAX_RECORD_TIME) {
                         stopCamera();
@@ -730,11 +744,11 @@
         recordBtn.onclick = function() {
             if (!mediaRecorder) return;
             if (isRecording) {
-                // 録画を一旦停止
+                // 一時停止処理
                 isRecording = false; recordBtn.classList.remove('recording'); clearInterval(timerInterval);
                 if (mediaRecorder.state !== 'inactive') mediaRecorder.stop(); 
             } else {
-                // 録画を開始（再開）
+                // 再開処理
                 if (totalRecordTime >= MAX_RECORD_TIME) return;
                 isRecording = true; recordBtn.classList.add('recording');
                 recordedChunks = [];
@@ -759,7 +773,7 @@
             renderCalendarAndTickets(); initMonthScreen();
         };
 
-        /* === 6. 再生画面（複数断片のシームレス展開対応） === */
+        /* === 6. 再生画面（複数断片動画のシームレス連結リレー対応） === */
         let playlistUrls = [];
         let currentPlayIndex = 0;
 
@@ -770,7 +784,7 @@
                 const parts = key.split('-');
                 const formattedDate = `${parts[0]}.${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
                 
-                // その日のすべての断片をプレイリストにフラットに展開
+                // その日のすべての断片を順番にプレイリストにフラット展開
                 chunks.forEach(item => {
                     playlistUrls.push({ key: key, dateStr: formattedDate, url: URL.createObjectURL(item.blob) });
                 });
@@ -805,7 +819,7 @@
 
         document.getElementById('playback-back-btn').onclick = closePlaybackScreen;
 
-        /* --- 7. 書き出し（エクスポート）システム --- */
+        /* === 7. 書き出し（エクスポート）システム === */
         const exportTitle = document.getElementById('export-title');
         const exportDesc = document.getElementById('export-desc');
         const exportProgressBar = document.getElementById('export-progress-bar');
@@ -826,7 +840,7 @@
             const exportVideo = document.createElement('video');
             exportVideo.playsInline = true; exportVideo.muted = false; 
 
-            // 防波堤：オーディオパルスの生成
+            // 防波堤ノードの接続
             let audioCtx = null; let dest = null; let dummyOsc = null;
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -848,7 +862,7 @@
             const exportChunks = [];
             exportRecorder.ondataavailable = e => { if(e.data.size > 0) exportChunks.push(e.data); };
 
-            // すべての断片動画を1つのフラットなキューに展開
+            // 1週間分の中に存在するすべての撮影断片をフラットなキューに全展開
             let allExportItems = [];
             for (let key of keys) {
                 const chunks = await getFullChunksForDate(key);
@@ -941,10 +955,13 @@
         };
 
         /* --- ナビゲーション --- */
+        // ★修正：「< BACK」での画面遷移時にも撮影中のセグメントを自動で強制保存（ガード機構）
         document.getElementById('camera-back-btn').onclick = () => { 
             if (isRecording) {
                 isRecording = false; recordBtn.classList.remove('recording'); clearInterval(timerInterval);
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop(); // これにより自動的にonstopが走り、現在のセグメントがDBへ書き込まれます
+                }
             }
             stopCamera(); 
             cameraScreen.style.display = 'none'; 
