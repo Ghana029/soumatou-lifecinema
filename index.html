@@ -324,7 +324,7 @@
         /* =========================================
            2. データベース操作
         ========================================= */
-        const dbName = 'OneYearInTwoHoursDB_v8';
+        const dbName = 'OneYearInTwoHoursDB_v9';
         const storeName = 'videos';
         let db = null;
 
@@ -448,13 +448,19 @@
         let currentRecordingDateStr = "";
         let selectedMonth = null;
         let currentRenderYear = viewYear;
+        
+        // ★修正：recordedDataに「isComplete（20秒完了しているか）」のフラグを持たせる
         let recordedData = {};
 
         async function startApp() {
             try {
                 await initDB();
                 const keys = await getAllRecordedKeys();
-                keys.forEach(key => { recordedData[key] = true; });
+                for (let key of keys) {
+                    const chunks = await getFullChunksForDate(key);
+                    const total = chunks.reduce((sum, item) => sum + item.duration, 0);
+                    recordedData[key] = { exists: true, isComplete: total >= MAX_RECORD_TIME };
+                }
             } catch (err) {}
             initMonthScreen();
             buildSettingsUI();
@@ -470,7 +476,9 @@
                 let targetMonthNum = monthSequence[i];
                 const card = document.createElement('div'); card.className = 'month-card';
                 let targetYearForCard = viewYear; if (targetMonthNum < appStartMonth) targetYearForCard = viewYear + 1; 
-                if (Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`))) card.classList.add('has-data');
+                
+                const hasData = Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`) && recordedData[key].exists);
+                if (hasData) card.classList.add('has-data');
                 
                 const nameSpan = document.createElement('div'); nameSpan.className = 'month-name'; nameSpan.textContent = monthNames[targetMonthNum - 1];
                 card.appendChild(nameSpan);
@@ -488,7 +496,8 @@
             cards.forEach((card, index) => {
                 card.className = 'month-card'; 
                 let targetMonthNum = monthSequence[index]; let targetYearForCard = viewYear; if (targetMonthNum < appStartMonth) targetYearForCard = viewYear + 1;
-                if (Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`))) card.classList.add('has-data');
+                const hasData = Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`) && recordedData[key].exists);
+                if (hasData) card.classList.add('has-data');
 
                 if (index === activeMonthIndex) {
                     card.classList.add('active');
@@ -562,7 +571,7 @@
             };
         }
 
-        /* === 4. カレンダーとチケットの描画（本番仕様に戻す） === */
+        /* === 4. カレンダーとチケットの描画 === */
         function openMonth(month, year) {
             selectedMonth = month; currentRenderYear = year;
             monthTitle.textContent = `${monthNames[month - 1]} ${year}`;
@@ -587,11 +596,10 @@
 
                 const isToday = (boxYear === currentYearReal && boxMonth === currentMonthNumReal && boxDate === currentDateReal);
                 if (isToday) dayBox.classList.add('today');
-                if (recordedData[dataKey]) dayBox.classList.add('recorded');
+                if (recordedData[dataKey] && recordedData[dataKey].exists) dayBox.classList.add('recorded');
 
                 const dayText = document.createElement('span'); dayText.textContent = boxDate; dayBox.appendChild(dayText);
                 
-                // ★本番仕様：撮影は今日（isToday）のみ可能
                 dayBox.onclick = async () => {
                     if (isToday) {
                         const chunks = await getFullChunksForDate(dataKey);
@@ -602,7 +610,7 @@
                         }
                     }
                     
-                    if (recordedData[dataKey]) { 
+                    if (recordedData[dataKey] && recordedData[dataKey].exists) { 
                         startPlayback([dataKey]); 
                         return; 
                     }
@@ -627,15 +635,15 @@
             let validKeys = [];
             datesInWeek.forEach(d => {
                 const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-                if (recordedData[key]) validKeys.push(key);
+                if (recordedData[key] && recordedData[key].exists) validKeys.push(key);
             });
             const recordedCount = validKeys.length;
 
-            // ★本番仕様：週が終了している、もしくは週の最終日のデータが存在する場合のみ書き出しを許可
+            // ★修正：土曜日（最後の日）の録画が「20秒完全に完了しているか」を判定基準にする
             const lastDateKey = `${endDay.getFullYear()}-${endDay.getMonth() + 1}-${endDay.getDate()}`;
-            const isLastDayRecorded = !!recordedData[lastDateKey]; 
+            const isLastDayComplete = recordedData[lastDateKey] && recordedData[lastDateKey].isComplete; 
             const isWeekOver = todayResetObj > endDay; 
-            const isViewable = isLastDayRecorded || isWeekOver;
+            const isViewable = isLastDayComplete || isWeekOver;
 
             const ticket = document.createElement('div'); ticket.className = 'ticket';
             if (!isViewable) ticket.classList.add('locked');
@@ -664,6 +672,9 @@
         let currentExistingChunks = []; 
         let segmentStartTime = 0;
         let cameraStream = null;
+        
+        // ★追加：タイマーの正確性を担保するため、録画中のセグメント時間を記録
+        let currentSegmentDuration = 0; 
 
         async function openCameraScreen(y, m, d) {
             recordTargetYear = y; recordTargetMonth = m; recordTargetDay = d;
@@ -681,6 +692,7 @@
             cameraLoading.style.display = 'block';
             cameraView.style.opacity = '0';
             isRecording = false;
+            currentSegmentDuration = 0;
 
             currentExistingChunks = await getFullChunksForDate(dataKey);
             totalRecordTime = currentExistingChunks.reduce((sum, item) => sum + item.duration, 0);
@@ -722,7 +734,7 @@
                     const mimeType = mediaRecorder.mimeType || (recordedChunks[0] && recordedChunks[0].type) || '';
                     const blob = new Blob(recordedChunks, { type: mimeType }); 
                     
-                    const currentSegmentDuration = Date.now() - segmentStartTime;
+                    // ★修正：放置時間バグを防ぐため、Date.now()ではなく100msごとに加算した実録画時間を採用
                     const durationToAdd = Math.min(currentSegmentDuration, MAX_RECORD_TIME - totalRecordTime);
                     
                     if (durationToAdd > 100) { 
@@ -731,9 +743,10 @@
                         const dataKey = `${recordTargetYear}-${recordTargetMonth}-${recordTargetDay}`;
                         try { 
                             await saveVideoToDB(dataKey, currentExistingChunks); 
-                            recordedData[dataKey] = true; 
+                            recordedData[dataKey] = { exists: true, isComplete: totalRecordTime >= MAX_RECORD_TIME }; 
                         } catch(e) { console.error("保存失敗", e); }
                     }
+                    currentSegmentDuration = 0;
                     resolve();
                 };
                 mediaRecorder.stop();
@@ -766,7 +779,7 @@
                 isRecording = true; 
                 recordBtn.classList.add('recording');
                 recordedChunks = [];
-                segmentStartTime = Date.now();
+                currentSegmentDuration = 0;
                 
                 mediaRecorder = new MediaRecorder(cameraStream);
                 mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunks.push(event.data); };
@@ -774,7 +787,9 @@
                 recordBtn.disabled = false;
 
                 timerInterval = setInterval(() => {
-                    const displayTime = totalRecordTime + (Date.now() - segmentStartTime);
+                    // ★修正：スリープ放置バグを防ぐため、フロントのタイマーで直接秒数を刻む
+                    currentSegmentDuration += 100;
+                    const displayTime = totalRecordTime + currentSegmentDuration;
                     progressBar.style.width = (displayTime / MAX_RECORD_TIME) * 100 + '%';
                     recordTimer.textContent = `00:${Math.floor(displayTime / 1000).toString().padStart(2, '0')} / 00:20`;
                     
@@ -785,6 +800,25 @@
                 }, 100);
             }
         };
+
+        // ★追加：アプリがバックグラウンド（裏側）に回った際に、録画を強制的に止めて安全に保存する
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'hidden') {
+                if (isRecording) {
+                    isRecording = false; 
+                    recordBtn.classList.remove('recording'); 
+                    clearInterval(timerInterval);
+                    await stopRecordingAndSave(); 
+                }
+                if (cameraScreen.style.display === 'flex') {
+                    stopCamera(); 
+                    cameraScreen.style.display = 'none'; 
+                    homeScreen.style.display = 'flex'; 
+                    renderCalendarAndTickets(); 
+                    initMonthScreen();
+                }
+            }
+        });
 
         document.getElementById('finish-ok-btn').onclick = () => {
             finishScreen.style.display = 'none'; homeScreen.style.display = 'flex';
