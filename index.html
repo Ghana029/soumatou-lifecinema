@@ -2,1032 +2,1572 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>1 Year in 2 Hours</title>
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="1Year2Hours">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'><rect width='256' height='256' fill='%23111'/><circle cx='128' cy='128' r='90' fill='none' stroke='%23b22222' stroke-width='12'/><rect x='100' y='90' width='60' height='80' fill='%23f4ebd0'/></svg>">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Photo Calendar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
     <style>
+        /* --- 動的テーマ用の変数定義 --- */
         :root {
-            --app-font: Futura, 'Century Gothic', 'Noto Sans JP', sans-serif;
+            --bg-color: #0d0d0d;
+            --text-color: #e6e6e6;
+            --font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+
+            --card-bg: color-mix(in srgb, var(--bg-color) 94%, var(--text-color));
+            --tile-bg: color-mix(in srgb, var(--bg-color) 88%, var(--text-color));
+            --border-color: color-mix(in srgb, var(--bg-color) 70%, var(--text-color));
+            --border-active: color-mix(in srgb, var(--bg-color) 40%, var(--text-color));
+            --day-num-color: color-mix(in srgb, var(--bg-color) 50%, var(--text-color));
+        }
+
+        * {
+            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            outline: none !important;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            height: 100dvh; 
+            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--bg-color);
         }
 
         body {
-            font-family: var(--app-font);
-            background-color: #111;
-            color: #f4ebd0;
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            overscroll-behavior-y: none;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        #app {
-            width: 100%;
-            max-width: 400px;
-            height: 100dvh;
-            position: relative;
-            background-color: #1a1a1a;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            font-family: var(--font-family);
+            color: var(--text-color);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
-        button, input, select, textarea {
-            font-family: inherit;
+        /* 1. 月カードの縦スクロールコンテナ */
+        .month-scroll-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto;
+            scroll-snap-type: y proximity; 
+            padding: 0;
+            -webkit-overflow-scrolling: touch;
+            z-index: 5;
+            transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+            scroll-behavior: smooth;
         }
-
-        .back-btn {
-            background: none; border: none; color: #f4ebd0; font-size: 14px;
-            cursor: pointer; padding: 0; letter-spacing: 1px; width: 60px; text-align: left;
-        }
-        .header-spacer { width: 60px; }
-
-        /* --- 1. 月選択画面 --- */
-        #month-screen { display: flex; flex-direction: column; height: 100dvh; position: relative; -webkit-tap-highlight-color: transparent; }
-        .month-screen-header {
-            position: absolute; top: 0; left: 0; width: 100%; text-align: center; padding: 40px 0 20px 0;
-            font-size: 18px; letter-spacing: 4px; z-index: 20; background: linear-gradient(to bottom, rgba(26,26,26,0.9) 20%, transparent); pointer-events: none;
-        }
-        #month-list { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-
-        .month-card {
-            position: absolute; left: 0; right: 0; top: 0; bottom: 0; margin: auto; width: 85%; height: auto; aspect-ratio: 16 / 9;
-            background-color: #222; border: 2px solid #444; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 15px 35px rgba(0,0,0,0.8); cursor: pointer; opacity: 0; transform: translateY(0); pointer-events: none; z-index: 0;
-        }
-        .month-card.active { transform: translateY(0); opacity: 1; z-index: 10; border-color: #f4ebd0; pointer-events: auto; filter: blur(0px) brightness(1); }
-        .month-card.prev { transform: translateY(-60%); opacity: 0.85; z-index: 5; pointer-events: auto; filter: blur(1px) brightness(0.75); }
-        .month-card.next { transform: translateY(60%); opacity: 0.85; z-index: 5; pointer-events: auto; filter: blur(1px) brightness(0.75); }
-        .month-card.hidden-prev { transform: translateY(-120%); opacity: 0; }
-        .month-card.hidden-next { transform: translateY(120%); opacity: 0; }
-
-        .month-name { font-size: 32px; letter-spacing: 3px; z-index: 2; text-shadow: 2px 2px 5px rgba(0,0,0,0.9); }
-        .month-card.has-data::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(45deg, #4a3f35, #2a221d); opacity: 0.7; z-index: 1; }
-
-        .bottom-menu { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; gap: 20px; z-index: 30; pointer-events: auto; }
-        .text-btn { background: none; border: 1px solid #444; color: #888; padding: 8px 15px; font-size: 10px; letter-spacing: 2px; cursor: pointer; border-radius: 20px; transition: 0.3s; -webkit-tap-highlight-color: transparent; }
-        .text-btn:hover { background-color: #333; color: #f4ebd0; border-color: #666; }
-
-        /* --- 2. ホーム画面 --- */
-        #home-screen { display: none; flex-direction: column; height: 100dvh; }
-        .home-header { display: flex; align-items: center; padding: 20px; border-bottom: 1px solid #333; margin-top: 10px; }
-        h2.screen-title { margin: 0; flex-grow: 1; text-align: center; font-size: 20px; letter-spacing: 2px; font-weight: normal; }
-        #calendar-container { padding: 20px; overflow-y: auto; flex-grow: 1; overscroll-behavior-y: auto; }
-        .weekday-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 10px; text-align: center; font-size: 12px; color: #666; }
-        #calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 30px; }
-
-        .day-box {
-            aspect-ratio: 1; background-color: #2a2a2a; border: 1px solid #444; display: flex; align-items: center; justify-content: center;
-            font-size: 14px; color: #888; cursor: pointer; position: relative; overflow: hidden; transition: all 0.3s; box-sizing: border-box; -webkit-tap-highlight-color: transparent;
-        }
-        .day-box.out-of-month { opacity: 0.4; background-color: #151515; border-color: #222; }
-        .day-box.today { border: 2px solid #b22222; color: #f4ebd0; box-shadow: inset 0 0 15px rgba(178, 34, 34, 0.2); opacity: 1; }
-        .day-box.recorded { background-color: #4a3f35; color: #f4ebd0; border-color: #665; opacity: 1; }
-        .day-box.recorded::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); }
-        .day-box span { position: relative; z-index: 1; }
-
-        #tickets-area { display: flex; flex-direction: column; gap: 15px; padding-bottom: 30px; }
-        .ticket {
-            background-color: #f4ebd0; color: #111; border: 2px dashed #111; border-radius: 8px; padding: 15px 20px;
-            display: flex; align-items: center; justify-content: space-between; transition: transform 0.2s, background-color 0.2s; position: relative; -webkit-tap-highlight-color: transparent;
-        }
-        .ticket::before, .ticket::after { content: ''; position: absolute; top: 50%; width: 16px; height: 16px; background-color: #1a1a1a; border-radius: 50%; transform: translateY(-50%); }
-        .ticket::before { left: -8px; } .ticket::after { right: -8px; }
-        .ticket.locked { background-color: #2a2a2a; color: #666; border-color: #444; }
-        .ticket.locked .ticket-dates { color: #555; }
-        .ticket-info { display: flex; flex-direction: column; cursor: default; }
-        .ticket-week { font-size: 16px; font-weight: bold; letter-spacing: 2px; }
-        .ticket-dates { font-size: 11px; color: #444; margin-top: 4px; }
-        
-        .ticket-play { font-size: 18px; display: flex; align-items: center; gap: 8px; }
-        .ticket.locked .ticket-play { font-size: 14px; }
-        .record-badge { font-size: 10px; background: #b22222; color: #fff; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
-
-        .action-btns { display: flex; gap: 10px; }
-        .ticket-action-btn { 
-            background: none; border: 1px solid #111; color: #111; font-size: 14px; 
-            cursor: pointer; border-radius: 4px; padding: 6px 12px; transition: 0.2s;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .ticket-action-btn:hover { background-color: #111; color: #f4ebd0; }
-
-        /* --- 共通：動画コンテナとウォーターマーク --- */
-        .video-container { width: 100%; aspect-ratio: 16 / 9; background-color: #222; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-top: 20px; }
-        .video-element { width: 100%; height: 100%; object-fit: cover; z-index: 1; pointer-events: none; transition: opacity 0.3s ease; }
-        
-        .watermark-overlay {
-            position: absolute; 
-            bottom: 6px;  
-            right: 10px;   
-            color: rgba(244, 235, 208, 0.35); 
-            font-size: 10px; 
-            font-weight: normal; 
-            letter-spacing: 1px; 
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5); 
-            z-index: 30; pointer-events: none; display: none;
-        }
-
-        .loading-text {
-            position: absolute;
-            z-index: 15;
-            color: #888;
-            font-size: 12px;
-            letter-spacing: 4px;
-            animation: pulse 1.5s infinite;
+        .month-scroll-container::-webkit-scrollbar {
             display: none;
         }
-        @keyframes pulse {
-            0% { opacity: 0.3; }
-            50% { opacity: 1; }
-            100% { opacity: 0.3; }
+
+        body.calendar-open .month-scroll-container {
+            transform: scale(0.95);
+            opacity: 0;
+            pointer-events: none;
         }
 
-        /* --- 3. 撮影画面 --- */
-        #camera-screen { display: none; flex-direction: column; height: 100dvh; background-color: #000; }
-        .camera-header { padding: 20px; display: flex; align-items: center; border-bottom: 1px solid #222; margin-top: 10px; }
-        #camera-date-display { flex-grow: 1; text-align: center; font-size: 16px; letter-spacing: 2px; color: #888; }
-        
-        #record-timer { position: absolute; top: 10px; right: 15px; color: #b22222; font-size: 14px; letter-spacing: 2px; z-index: 10; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; }
-        #progress-container { width: 100%; height: 6px; background-color: #111; position: absolute; bottom: 0; left: 0; z-index: 10; }
-        #progress-bar { height: 100%; width: 0%; background-color: #b22222; transition: width 0.1s linear; box-shadow: 0 0 10px rgba(178, 34, 34, 0.8); }
-
-        .controls { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
-        #record-btn { width: 70px; height: 70px; border-radius: 50%; background-color: #b22222; border: 4px solid #f4ebd0; cursor: pointer; outline: none; transition: transform 0.2s; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
-        #record-btn.recording { border-radius: 10px; transform: scale(0.9); }
-        #record-btn:disabled { background-color: #555; border-color: #777; cursor: not-allowed; }
-
-        /* --- 4. CUT画面 --- */
-        #finish-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100dvh; background-color: #0a0a0a; position: absolute; top: 0; left: 0; width: 100%; z-index: 100; }
-        .finish-title { font-size: 32px; letter-spacing: 8px; color: #f4ebd0; margin-bottom: 20px; font-style: italic; }
-        .finish-desc { font-size: 12px; color: #888; letter-spacing: 2px; margin-bottom: 50px; text-align: center; line-height: 1.6; }
-        .finish-btn { background-color: transparent; border: 1px solid #b22222; color: #b22222; padding: 15px 40px; font-size: 14px; letter-spacing: 3px; cursor: pointer; transition: 0.3s; -webkit-tap-highlight-color: transparent; }
-        .finish-btn:hover { background-color: #b22222; color: #111; }
-
-        /* --- 5. 再生画面 --- */
-        #playback-screen { display: none; flex-direction: column; justify-content: center; height: 100dvh; background-color: #000; position: relative; }
-        #playback-screen .camera-header { position: absolute; top: 10px; left: 0; width: 100%; box-sizing: border-box; z-index: 20; border-bottom: none; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); padding-top: 30px; }
-        #playback-date-display { flex-grow: 1; text-align: center; font-size: 16px; letter-spacing: 2px; color: #888; }
-        #playback-screen .video-container { margin: 0; position: relative; }
-        #playback-view { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
-
-        /* --- 6. 設定画面 --- */
-        #settings-screen {
-            display: none; flex-direction: column; align-items: center; justify-content: flex-start;
-            height: 100dvh; background-color: rgba(10,10,10,0.95); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;
-            overflow-y: auto; padding: 40px 0; box-sizing: border-box;
+        .scroll-spacer {
+            min-height: calc(50vh - 100px);
+            flex-shrink: 0;
         }
-        .settings-title { font-size: 16px; letter-spacing: 4px; color: #f4ebd0; margin-bottom: 20px; margin-top: 30px; }
+
+        .month-card {
+            width: calc(100vw - 20px);
+            max-width: 362px;
+            aspect-ratio: 16 / 9; 
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            
+            opacity: 0; 
+            transform: scale(0.85);
+            z-index: 1;
+            
+            transition: transform 0.4s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.4s ease, border 0.3s;
+            cursor: pointer;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            margin: 10px 0;
+            will-change: transform, opacity;
+        }
+
+        .month-card.active {
+            opacity: 1 !important;
+            transform: scale(1) translateY(0) !important;
+            z-index: 10 !important;
+            border: 1px solid var(--border-active);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+        }
         
-        #font-select-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 90%; max-width: 360px; margin-bottom: 20px; }
-        #font-select-container .month-opt-btn { padding: 10px 0; font-size: 11px; text-align: center; }
+        .month-card .card-title {
+            position: absolute;
+            bottom: 8px;
+            left: 12px;
+            font-size: 1.2rem;
+            font-weight: 300;
+            letter-spacing: 0.15em;
+            color: var(--text-color);
+            z-index: 4;
+            text-shadow: 0 2px 8px var(--bg-color);
+            transition: opacity 0.3s ease, text-shadow 0.3s ease;
+        }
 
-        .settings-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 85%; max-width: 320px; margin-bottom: 20px; }
-        .settings-grid .month-opt-btn { padding: 12px 0; text-align: center; }
+        .card-slideshow-img {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 2s ease-in-out;
+        }
+        
+        .card-slideshow-img.fade-in {
+            opacity: 1; 
+        }
 
-        .month-opt-btn { background-color: #222; border: 1px solid #444; color: #888; padding: 10px 15px; font-size: 14px; border-radius: 4px; cursor: pointer; transition: 0.2s; -webkit-tap-highlight-color: transparent; }
-        .month-opt-btn.selected { background-color: #b22222; color: #f4ebd0; border-color: #f4ebd0; }
-        .close-settings-btn { background: none; border: 1px solid #888; color: #888; padding: 10px 30px; cursor: pointer; border-radius: 20px; margin-top: 40px; }
+        .month-card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to top, var(--bg-color) 0%, transparent 30%);
+            z-index: 2;
+            pointer-events: none;
+        }
 
-        /* --- 7. 書き出し画面 --- */
-        #export-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100dvh; background-color: #0a0a0a; position: absolute; top: 0; left: 0; width: 100%; z-index: 100; }
-        #export-screen .finish-title { font-size: 24px; margin-bottom: 15px; }
-        #export-screen .finish-desc { font-size: 12px; margin-bottom: 20px; text-align: center; }
-        #export-canvas { width: 80%; max-width: 320px; aspect-ratio: 16 / 9; background-color: #000; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.8); margin-bottom: 30px; border: 1px solid #333; filter: grayscale(30%); }
-        #export-progress-container { width: 60%; height: 4px; background-color: #333; margin-bottom: 40px; border-radius: 2px; overflow: hidden; }
-        #export-progress-bar { height: 100%; width: 0%; background-color: #f4ebd0; transition: width 0.3s; }
-        #export-download-link { text-decoration: none; display: inline-block; margin-bottom: 0; }
-        #export-screen .finish-btn { width: 260px; box-sizing: border-box; margin: 6px 0; text-align: center; white-space: nowrap; padding: 15px 20px; }
+        /* 2. カレンダーエリア */
+        .calendar-container {
+            width: 100%;
+            position: absolute;
+            top: 0;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+            transform: translateX(20px);
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 5;
+            display: flex;
+            align-items: center;
+        }
 
+        body.calendar-open .calendar-container {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
+
+        .calendar-header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .calendar-month-text {
+            font-size: 2.4rem;
+            font-weight: 200;
+            color: var(--text-color);
+            letter-spacing: 0.1em;
+            line-height: 1;
+            opacity: 0.9;
+        }
+
+        /* ボタン類の共通スタイル */
+        .theme-select-btn, .toggle-view-btn, .settings-btn, 
+        .back-to-months-btn, .gallery-close-btn, .lightbox-close-btn, .export-btn {
+            color: var(--text-color);
+            opacity: 0.7;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: var(--bg-color);
+            text-shadow: none;
+            transition: opacity 0.3s, background-color 0.2s, border-color 0.2s;
+        }
+
+        .theme-select-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 20;
+            border-radius: 6px;
+        }
+        body.calendar-open .theme-select-btn {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .export-btn { position: absolute; top: 20px; right: 20px; z-index: 10; }
+        .toggle-view-btn { position: absolute; bottom: 40px; right: 20px; z-index: 10; }
+        .settings-btn { position: absolute; bottom: 40px; left: 20px; z-index: 10; }
+        .gallery-close-btn { position: absolute; top: 20px; left: 20px; z-index: 25; }
+
+        .lightbox-close-btn { 
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            z-index: 105; 
+            opacity: 0.3; 
+            background-color: color-mix(in srgb, var(--bg-color) 40%, transparent); 
+            border-color: color-mix(in srgb, var(--border-color) 40%, transparent); 
+            backdrop-filter: blur(4px); 
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .lightbox-close-btn:hover, .lightbox-close-btn:active {
+            opacity: 1; 
+            background-color: color-mix(in srgb, var(--bg-color) 80%, transparent);
+        }
+
+        .calendar-scroll-wrapper {
+            width: 100%;
+            display: flex;
+            overflow-x: hidden;
+            align-items: center; 
+        }
+        .calendar-scroll-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .calendar-grid {
+            display: grid !important;
+            grid-template-columns: repeat(7, 1fr) !important;
+            gap: 2px !important; 
+            width: calc(100vw - 20px) !important;
+            max-width: 362px !important;
+            background-color: transparent; 
+            margin: 0 10px !important; 
+            scroll-snap-align: center;
+            flex-shrink: 0;
+            transition: opacity 0.3s ease; 
+        }
+
+        @media (min-width: 382px) {
+            .calendar-grid {
+                margin: 0 calc((100vw - 362px) / 2) !important;
+            }
+        }
+
+        /* 書き出し時に前後の月を非表示にする専用のCSS */
+        body.export-active #calendar-prev,
+        body.export-active #calendar-next {
+            display: none !important;
+        }
+
+        .day-tile {
+            position: relative;
+            width: 100% !important;   
+            height: auto !important;  
+            aspect-ratio: 1 / 1; 
+            background-color: var(--tile-bg); 
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            overflow: hidden;
+            box-sizing: border-box !important;
+        }
+
+        .day-tile.has-image {
+            border: 1px solid var(--border-active);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .day-tile:nth-child(7n) {
+            margin-right: 0px !important;
+        }
+
+        .day-tile.blank-tile {
+            cursor: default;
+            background-color: transparent;
+            border: none;
+            box-shadow: none; 
+        }
+
+        .day-number {
+            font-size: 1.4rem;
+            font-weight: 200;
+            color: var(--day-num-color);
+            z-index: 2;
+            pointer-events: none;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        .day-tile.has-image .day-number {
+            display: none !important;
+        }
+
+        .day-tile img {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            animation: fadeIn 0.4s ease;
+        }
+
+        /* 3. ギャラリービュー */
+        .gallery-container {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            z-index: 20;
+            display: none;
+            padding-top: 70px; 
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        .gallery-grid {
+            display: grid;
+            gap: 1px; 
+            background-color: var(--border-active); 
+            width: 100%;
+        }
+
+        .gallery-tile {
+            aspect-ratio: 1 / 1;
+            background-color: var(--card-bg);
+            border-radius: 0; 
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .gallery-tile img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* 4. 特大写真表示（ライトボックス） */
+        .lightbox-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: color-mix(in srgb, var(--bg-color) 95%, transparent);
+            z-index: 100;
+            display: none; 
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            touch-action: none;
+        }
+
+        .lightbox-overlay.open {
+            display: flex;
+            opacity: 1;
+        }
+
+        .lightbox-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .lightbox-content-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .lightbox-img {
+            max-width: calc(100vw - 20px);
+            max-height: calc(100vh - 30px);
+            max-height: calc(100dvh - 30px);
+            width: auto;
+            height: auto;
+            display: block;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            cursor: pointer;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        @media (min-width: 382px) {
+            .lightbox-img {
+                max-width: 362px;
+            }
+        }
+
+        .lightbox-date {
+            position: absolute;
+            color: var(--text-color);
+            opacity: 0.7;
+            font-size: 1rem;
+            letter-spacing: 0.1em;
+            font-weight: 200;
+            pointer-events: none;
+            transition: bottom 0.2s, right 0.2s;
+            z-index: 110;
+            text-shadow: 0 2px 4px var(--bg-color), 0 0 8px var(--bg-color);
+        }
+
+        /* 5. モーダル共通デザイン */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); z-index: 200; display: none;
+            justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-overlay.open { display: flex; opacity: 1; }
+        .modal-box {
+            background-color: var(--card-bg); padding: 30px; border-radius: 12px;
+            border: 1px solid var(--border-color); color: var(--text-color);
+            display: flex; flex-direction: column; gap: 20px; min-width: 250px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8); max-height: 80vh;
+        }
+        .modal-box h3 { 
+            margin: 0; font-weight: 300; letter-spacing: 0.1em; 
+            border-bottom: 1px solid var(--border-color); padding-bottom: 10px;
+        }
+        
+        .settings-label { 
+            display: flex; justify-content: space-between; align-items: center; 
+            font-size: 0.9rem; letter-spacing: 0.05em;
+        }
+        .modal-box input[type="color"] { 
+            background: none; border: none; cursor: pointer; width: 35px; height: 35px; 
+            padding: 0; border-radius: 4px; overflow: hidden;
+        }
+        .modal-box select {
+            background-color: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color);
+            padding: 8px; border-radius: 4px; font-family: inherit; outline: none; cursor: pointer;
+        }
+        .modal-box button {
+            background-color: transparent; color: var(--text-color); border: 1px solid var(--border-active);
+            padding: 12px; border-radius: 6px; cursor: pointer; margin-top: 10px; font-family: inherit; letter-spacing: 0.1em;
+            transition: background-color 0.2s;
+        }
+        .modal-box button:hover { background-color: var(--border-color); }
+
+        .theme-list {
+            list-style: none; padding: 0; margin: 0; 
+            max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;
+        }
+        .theme-item {
+            padding: 12px 15px; cursor: pointer; transition: background 0.2s;
+            font-size: 0.9rem; letter-spacing: 0.1em;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .theme-item:last-child { border-bottom: none; }
+        .theme-item.active { background-color: var(--text-color); color: var(--bg-color); font-weight: bold; }
+        .theme-item:hover:not(.active) { background-color: var(--border-active); }
+
+        .theme-delete-btn {
+            color: #ff6b6b; font-size: 1.2rem; line-height: 1; padding: 0 5px; 
+            cursor: pointer; opacity: 0.7; transition: opacity 0.2s;
+        }
+        .theme-delete-btn:hover { opacity: 1; }
+
+        /* 6. カスタムアクションシート */
+        .action-sheet-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); z-index: 300; display: none;
+            justify-content: center; align-items: flex-end; opacity: 0; transition: opacity 0.3s;
+            padding-bottom: 30px; box-sizing: border-box;
+        }
+        .action-sheet-overlay.open { display: flex; opacity: 1; }
+        .action-sheet-box {
+            width: 90%; max-width: 400px;
+            display: flex; flex-direction: column; gap: 8px;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .action-sheet-overlay.open .action-sheet-box { transform: translateY(0); }
+        .action-sheet-group {
+            display: flex; flex-direction: column;
+            background-color: var(--card-bg); border-radius: 12px; overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .action-sheet-btn {
+            background-color: transparent; color: var(--text-color); border: none;
+            padding: 18px; cursor: pointer; font-family: inherit; font-size: 1rem; letter-spacing: 0.1em;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        .action-sheet-btn:last-child { border-bottom: none; }
+        .action-sheet-btn:active { background-color: var(--border-active); }
+        .action-sheet-btn.danger { color: #ff6b6b; font-weight: bold; }
+        .action-sheet-cancel {
+            background-color: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);
+            padding: 18px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 1rem; letter-spacing: 0.1em; font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .action-sheet-cancel:active { background-color: var(--border-active); }
+
+        /* 書き出し結果表示用オーバーレイ */
+        .export-result-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--bg-color); z-index: 400; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .export-result-overlay.open { display: flex; opacity: 1; }
+        .export-result-header {
+            position: absolute; top: 20px; width: calc(100% - 40px);
+            display: flex; justify-content: space-between; align-items: center;
+            color: var(--text-color); font-size: 0.9rem; letter-spacing: 0.1em;
+            z-index: 410;
+        }
+        #export-result-close-btn {
+            background: transparent; border: 1px solid var(--border-color); color: var(--text-color);
+            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.8rem;
+            letter-spacing: 0.1em; transition: background-color 0.2s;
+        }
+        #export-result-close-btn:active { background-color: var(--border-active); }
+        
+        .export-result-img {
+            max-width: 90%; max-height: 80%; object-fit: contain;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            -webkit-touch-callout: default !important;
+            -webkit-user-select: auto !important;
+            user-select: auto !important;
+            pointer-events: auto !important;
+        }
+
+        #file-input { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="app">
-        <div id="month-screen">
-            <div class="month-screen-header">YEAR <span id="current-year-display"></span></div>
-            <div id="month-list"></div>
-            <div class="bottom-menu">
-                <button class="text-btn" id="open-settings-btn">≡ SETTINGS</button>
-            </div>
-        </div>
-
-        <div id="home-screen">
-            <header class="home-header">
-                <button class="back-btn" id="month-back-btn">&lt; BACK</button>
-                <h2 class="screen-title" id="month-title">June</h2>
-                <div class="header-spacer"></div>
-            </header>
-            <div id="calendar-container">
-                <div class="weekday-header">
-                    <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
-                </div>
-                <div id="calendar"></div>
-                <div id="tickets-area"></div>
-            </div>
-        </div>
-
-        <div id="camera-screen">
-            <header class="camera-header">
-                <button class="back-btn" id="camera-back-btn">&lt; BACK</button>
-                <div id="camera-date-display">REC</div>
-                <div class="header-spacer"></div>
-            </header>
-            <div class="video-container">
-                <div id="camera-loading" class="loading-text" style="display:block;">CAMERA SETUP...</div>
-                <video id="camera-view" class="video-element" autoplay muted playsinline></video>
-                <div id="camera-watermark" class="watermark-overlay"></div>
-                <div id="record-timer">00:00 / 00:20</div>
-                <div id="progress-container"><div id="progress-bar"></div></div>
-            </div>
-            <div class="controls"><button id="record-btn" disabled></button></div>
-        </div>
-
-        <div id="finish-screen">
-            <div class="finish-title">CUT.</div>
-            <div class="finish-desc">今日の記録が完了しました</div>
-            <button class="finish-btn" id="finish-ok-btn">RETURN</button>
-        </div>
-
-        <div id="playback-screen">
-            <header class="camera-header">
-                <button class="back-btn" id="playback-back-btn">&lt; BACK</button>
-                <div id="playback-date-display">PLAY</div>
-                <div class="header-spacer"></div>
-            </header>
-            <div class="video-container" id="playback-container">
-                <div id="playback-loading" class="loading-text">LOADING...</div>
-                <video id="playback-view" class="video-element" playsinline webkit-playsinline></video>
-                <div id="playback-watermark" class="watermark-overlay"></div>
-            </div>
-        </div>
-
-        <div id="settings-screen">
-            <div class="settings-title">FONT</div>
-            <div id="font-select-container"></div>
-
-            <div class="settings-title">START MONTH</div>
-            <div class="settings-grid" id="month-select-container"></div>
-            
-            <div class="settings-title">DATE</div>
-            <div class="month-select-container">
-                <button class="month-opt-btn" id="watermark-on-btn">ON</button>
-                <button class="month-opt-btn" id="watermark-off-btn">OFF</button>
-            </div>
-
-            <button class="close-settings-btn" id="close-settings-btn">CLOSE</button>
-            <button id="reset-db-btn" style="margin-top:40px; background:none; border:1px solid #444; color:#666; padding:5px 10px; font-size:10px; border-radius:10px;">RESET ALL DATA</button>
-        </div>
-
-        <div id="export-screen">
-            <div class="finish-title" id="export-title">EXPORTING...</div>
-            <div class="finish-desc" id="export-desc">1週間分をまとめています<br>結構待つよごめんね</div>
-            <canvas id="export-canvas" width='1280' height='720'></canvas>
-            <div id="export-progress-container"><div id="export-progress-bar"></div></div>
-            <a id="export-download-link" style="display: none;"><button class="finish-btn">SAVE TO DEVICE</button></a>
-            <button class="finish-btn" id="export-return-btn" style="display: none;">RETURN</button>
-        </div>
-
+    <div class="month-scroll-container" id="scroll-container">
+        <div class="scroll-spacer"></div>
+        <div class="scroll-spacer"></div>
     </div>
 
+    <div class="theme-select-btn" id="theme-select-btn">THEME: <span id="current-theme-name">Main</span> ▾</div>
+
+    <div class="calendar-container" id="calendar-area">
+        <div class="calendar-header">
+            <div class="back-to-months-btn" id="back-to-months-btn">← BACK</div>
+            <div class="calendar-month-text" id="calendar-month-text"></div>
+        </div>
+
+        <div class="settings-btn" id="settings-btn">SETTINGS</div>
+        <div class="toggle-view-btn" id="toggle-view-btn">GALLERY</div>
+        <div class="export-btn" id="export-btn">EXPORT</div>
+
+        <div class="calendar-scroll-wrapper" id="calendar-wrapper">
+            <main class="calendar-grid" id="calendar-prev"></main>
+            <main class="calendar-grid" id="calendar-current"></main>
+            <main class="calendar-grid" id="calendar-next"></main>
+        </div>
+    </div>
+
+    <div class="gallery-container" id="gallery-container">
+        <div class="gallery-close-btn" id="gallery-close-btn">← BACK</div>
+        <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+
+    <div class="lightbox-overlay" id="lightbox">
+        <div class="lightbox-close-btn" id="lightbox-close-btn">← BACK</div>
+        <div class="lightbox-container" id="lightbox-container">
+            <div class="lightbox-content-wrapper">
+                <img class="lightbox-img" id="lightbox-image" src="" alt="拡大表示">
+                <div class="lightbox-date" id="lightbox-date"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="theme-overlay">
+        <div class="modal-box">
+            <h3>THEMES</h3>
+            <ul class="theme-list" id="theme-list"></ul>
+            <button id="add-theme-btn">＋ NEW THEME</button>
+            <button id="theme-close-btn">CLOSE</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settings-overlay">
+        <div class="modal-box">
+            <h3>DESIGN</h3>
+            <label class="settings-label">背景色
+                <input type="color" id="bg-color-picker" value="#0d0d0d">
+            </label>
+            <label class="settings-label">文字色
+                <input type="color" id="text-color-picker" value="#e6e6e6">
+            </label>
+            <label class="settings-label">フォント
+                <select id="font-select">
+                    <option value="sans-serif">ゴシック体</option>
+                    <option value="serif">明朝体</option>
+                    <option value="rounded">丸ゴシック</option>
+                    <option value="monospace">等幅フォント</option>
+                </select>
+            </label>
+            <button id="settings-close-btn">OK</button>
+        </div>
+    </div>
+
+    <div class="action-sheet-overlay" id="action-sheet">
+        <div class="action-sheet-box">
+            <div class="action-sheet-group">
+                <button class="action-sheet-btn" id="action-change-btn">写真を変更する</button>
+                <button class="action-sheet-btn danger" id="action-delete-btn">写真を削除する</button>
+            </div>
+            <button class="action-sheet-cancel" id="action-cancel-btn">キャンセル</button>
+        </div>
+    </div>
+
+    <div class="export-result-overlay" id="export-result-overlay">
+        <div class="export-result-header">
+            <span>長押しして「写真を保存」</span>
+            <button id="export-result-close-btn">CLOSE</button>
+        </div>
+        <img class="export-result-img" id="export-result-img" src="" alt="書き出し画像">
+    </div>
+
+    <input type="file" id="file-input" accept="image/*">
+
     <script>
-        /* =========================================
-           1. 設定データの読み込みと初期化
-        ========================================= */
-        const fontOptions = [
-            { label: 'Futura', value: "Futura, 'Century Gothic', 'Noto Sans JP', sans-serif" },
-            { label: 'Didot', value: "Didot, 'Bodoni MT', 'Noto Serif JP', serif" },
-            { label: 'Serif', value: "'Times New Roman', 'Noto Serif JP', serif" },
-            { label: 'Sans', value: "'Helvetica Neue', Arial, 'Noto Sans JP', sans-serif" }
-        ];
-
-        let appStartMonth = 1;
-        let showWatermark = true;
-        let appFont = fontOptions[0].value;
-
-        try {
-            appStartMonth = parseInt(localStorage.getItem('appStartMonth')) || 1;
-            showWatermark = localStorage.getItem('showWatermark') !== 'false';
-            const savedFont = localStorage.getItem('appFont');
-            if (savedFont && fontOptions.some(opt => opt.value === savedFont)) { appFont = savedFont; }
-        } catch (e) {}
-
-        document.documentElement.style.setProperty('--app-font', appFont);
-
-        /* =========================================
-           2. データベース操作
-        ========================================= */
-        const dbName = 'OneYearInTwoHoursDB_v9';
-        const storeName = 'videos';
-        let db = null;
+        // ★★★ IndexedDB (大容量保存) のセットアップ ★★★
+        const DB_NAME = 'PhotoCalendarDB';
+        const STORE_NAME = 'photos';
 
         function initDB() {
             return new Promise((resolve, reject) => {
-                try {
-                    const request = indexedDB.open(dbName, 1);
-                    request.onupgradeneeded = (e) => {
-                        const database = e.target.result;
-                        if (!database.objectStoreNames.contains(storeName)) { database.createObjectStore(storeName); }
-                    };
-                    request.onsuccess = (e) => { db = e.target.result; resolve(); };
-                    request.onerror = (e) => reject(request.error);
-                } catch(err) { reject(err); }
-            });
-        }
-
-        function saveVideoToDB(dateKey, blob) {
-            return new Promise((resolve, reject) => {
-                if (!db) { resolve(); return; }
-                const tx = db.transaction(storeName, 'readwrite');
-                const store = tx.objectStore(storeName);
-                store.put(blob, dateKey);
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        }
-
-        function getVideoFromDB(dateKey) {
-            return new Promise((resolve, reject) => {
-                if (!db) { resolve(null); return; }
-                const tx = db.transaction(storeName, 'readonly');
-                const store = tx.objectStore(storeName);
-                const request = store.get(dateKey);
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
+                    }
+                };
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
         }
 
-        function getAllRecordedKeys() {
+        async function getPhotoData(key) {
+            const db = await initDB();
             return new Promise((resolve, reject) => {
-                if (!db) { resolve([]); return; }
-                const tx = db.transaction(storeName, 'readonly');
-                const store = tx.objectStore(storeName);
-                const request = store.getAllKeys();
-                request.onsuccess = () => resolve(request.result);
+                const transaction = db.transaction(STORE_NAME, 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.get(key);
+                request.onsuccess = () => resolve(request.result || {});
                 request.onerror = () => reject(request.error);
             });
         }
 
-        document.getElementById('reset-db-btn').onclick = () => {
-            if(confirm("※注意※\nすべての録画データを消去してリセットしますか？")) {
-                try { const req = indexedDB.deleteDatabase(dbName); req.onsuccess = () => { alert("データをリセットしました。"); location.reload(); }; } catch(e) { alert("リセットに失敗しました。"); }
-            }
+        async function savePhotoData(key, data) {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.put(data, key);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function deletePhotoData(key) {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.delete(key);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // --- データ管理（テーマ・アカウント） ---
+        let currentThemeId = localStorage.getItem('photo_calendar_current_theme') || 'default';
+        let themes = JSON.parse(localStorage.getItem('photo_calendar_themes')) || [{id: 'default', name: 'Main'}];
+
+        function getStorageKey(year, month) {
+            const m = String(month).padStart(2, '0');
+            return currentThemeId === 'default' ? `photo_calendar_${year}_${m}` : `photo_calendar_${currentThemeId}_${year}_${m}`;
+        }
+
+        // --- デザイン設定（色・フォント）の管理 ---
+        const rootVars = document.documentElement.style;
+        const bgPicker = document.getElementById('bg-color-picker');
+        const textPicker = document.getElementById('text-color-picker');
+        const fontSelect = document.getElementById('font-select');
+        
+        const fontsMap = {
+            'sans-serif': '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, sans-serif',
+            'serif': '"Noto Serif JP", "Yu Mincho", "MS Mincho", serif',
+            'rounded': '"Hiragino Maru Gothic ProN", "Yu Rounded", "Arial Rounded MT Bold", sans-serif',
+            'monospace': 'ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace'
         };
 
-        async function getFullChunksForDate(key) {
-            try {
-                const result = await getVideoFromDB(key);
-                if (!result) return [];
-                if (Array.isArray(result)) {
-                    return result.map(item => {
-                        if (item && item.blob) return item;
-                        return { blob: item, duration: 20000 }; 
-                    });
-                } else if (result instanceof Blob) {
-                    return [{ blob: result, duration: 20000 }]; 
-                }
-                return [];
-            } catch(e) { return []; }
-        }
-
-        /* =========================================
-           3. アプリのUIとロジック構築
-        ========================================= */
-        const monthScreen = document.getElementById('month-screen');
-        const monthList = document.getElementById('month-list');
-        const homeScreen = document.getElementById('home-screen');
-        const cameraScreen = document.getElementById('camera-screen');
-        const finishScreen = document.getElementById('finish-screen');
-        const playbackScreen = document.getElementById('playback-screen');
-        const settingsScreen = document.getElementById('settings-screen');
-        const exportScreen = document.getElementById('export-screen');
-        
-        const calendarElement = document.getElementById('calendar');
-        const ticketsArea = document.getElementById('tickets-area');
-        const monthTitle = document.getElementById('month-title');
-        
-        const cameraDateDisplay = document.getElementById('camera-date-display');
-        const playbackDateDisplay = document.getElementById('playback-date-display');
-        const cameraWatermark = document.getElementById('camera-watermark');
-        const playbackWatermark = document.getElementById('playback-watermark');
-        
-        const cameraView = document.getElementById('camera-view');
-        const playbackView = document.getElementById('playback-view');
-        const playbackContainer = document.getElementById('playback-container');
-        
-        const cameraLoading = document.getElementById('camera-loading');
-        const playbackLoading = document.getElementById('playback-loading');
-
-        const recordBtn = document.getElementById('record-btn');
-        const progressBar = document.getElementById('progress-bar');
-        const recordTimer = document.getElementById('record-timer');
-
-        const todayDateObj = new Date();
-        const currentYearReal = todayDateObj.getFullYear();
-        const currentMonthNumReal = todayDateObj.getMonth() + 1;
-        const currentDateReal = todayDateObj.getDate();
-        const todayResetObj = new Date(currentYearReal, currentMonthNumReal - 1, currentDateReal);
-
-        const viewYear = currentYearReal;
-        document.getElementById('current-year-display').textContent = viewYear;
-        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        
-        let activeMonthIndex = 0; 
-        let cards = [];
-        let monthSequence = []; 
-        let recordTargetYear = null;
-        let recordTargetMonth = null;
-        let recordTargetDay = null;
-        let currentRecordingDateStr = "";
-        let selectedMonth = null;
-        let currentRenderYear = viewYear;
-        
-        // ★修正：recordedDataに「isComplete（20秒完了しているか）」のフラグを持たせる
-        let recordedData = {};
-
-        async function startApp() {
-            try {
-                await initDB();
-                const keys = await getAllRecordedKeys();
-                for (let key of keys) {
-                    const chunks = await getFullChunksForDate(key);
-                    const total = chunks.reduce((sum, item) => sum + item.duration, 0);
-                    recordedData[key] = { exists: true, isComplete: total >= MAX_RECORD_TIME };
-                }
-            } catch (err) {}
-            initMonthScreen();
-            buildSettingsUI();
-        }
-
-        function initMonthScreen() {
-            monthList.innerHTML = ''; cards = []; monthSequence = [];
-            for (let i = 0; i < 12; i++) { let m = ((appStartMonth - 1 + i) % 12) + 1; monthSequence.push(m); }
-            activeMonthIndex = monthSequence.indexOf(currentMonthNumReal);
-            if (activeMonthIndex === -1) activeMonthIndex = 0;
-
-            for (let i = 0; i < 12; i++) {
-                let targetMonthNum = monthSequence[i];
-                const card = document.createElement('div'); card.className = 'month-card';
-                let targetYearForCard = viewYear; if (targetMonthNum < appStartMonth) targetYearForCard = viewYear + 1; 
-                
-                const hasData = Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`) && recordedData[key].exists);
-                if (hasData) card.classList.add('has-data');
-                
-                const nameSpan = document.createElement('div'); nameSpan.className = 'month-name'; nameSpan.textContent = monthNames[targetMonthNum - 1];
-                card.appendChild(nameSpan);
-
-                card.onclick = () => {
-                    if (i === activeMonthIndex) { openMonth(targetMonthNum, targetYearForCard); } 
-                    else if (i === activeMonthIndex - 1 || i === activeMonthIndex + 1) { activeMonthIndex = i; updateMonthCards(); }
-                };
-                monthList.appendChild(card); cards.push(card);
-            }
-            updateMonthCards();
-        }
-
-        function updateMonthCards() {
-            cards.forEach((card, index) => {
-                card.className = 'month-card'; 
-                let targetMonthNum = monthSequence[index]; let targetYearForCard = viewYear; if (targetMonthNum < appStartMonth) targetYearForCard = viewYear + 1;
-                const hasData = Object.keys(recordedData).some(key => key.startsWith(`${targetYearForCard}-${targetMonthNum}-`) && recordedData[key].exists);
-                if (hasData) card.classList.add('has-data');
-
-                if (index === activeMonthIndex) {
-                    card.classList.add('active');
-                    document.getElementById('current-year-display').textContent = targetYearForCard;
-                }
-                else if (index === activeMonthIndex - 1) card.classList.add('prev');
-                else if (index === activeMonthIndex + 1) card.classList.add('next');
-                else if (index < activeMonthIndex - 1) card.classList.add('hidden-prev');
-                else if (index > activeMonthIndex + 1) card.classList.add('hidden-next');
-            });
-        }
-
-        let isScrolling = false; let startY = 0;
-        monthScreen.addEventListener('wheel', (e) => {
-            if (isScrolling) return;
-            if (e.deltaY > 20 && activeMonthIndex < 11) { activeMonthIndex++; updateMonthCards(); lockScroll(); }
-            else if (e.deltaY < -20 && activeMonthIndex > 0) { activeMonthIndex--; updateMonthCards(); lockScroll(); }
-        });
-        monthScreen.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
-        monthScreen.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; });
-        monthScreen.addEventListener('touchend', (e) => {
-            const endY = e.changedTouches[0].clientY; const delta = startY - endY;
-            if (delta > 30 && activeMonthIndex < 11) { activeMonthIndex++; updateMonthCards(); }
-            else if (delta < -30 && activeMonthIndex > 0) { activeMonthIndex--; updateMonthCards(); }
-        });
-        function lockScroll() { isScrolling = true; setTimeout(() => { isScrolling = false; }, 400); }
-
-        document.getElementById('open-settings-btn').onclick = () => { settingsScreen.style.display = 'flex'; };
-        document.getElementById('close-settings-btn').onclick = () => { settingsScreen.style.display = 'none'; };
-
-        function buildSettingsUI() {
-            const fontContainer = document.getElementById('font-select-container'); fontContainer.innerHTML = '';
-            fontOptions.forEach(opt => {
-                const btn = document.createElement('button'); btn.className = 'month-opt-btn';
-                if(opt.value === appFont) btn.classList.add('selected');
-                btn.textContent = opt.label;
-                btn.onclick = () => {
-                    appFont = opt.value; try { localStorage.setItem('appFont', appFont); } catch(e){}
-                    document.documentElement.style.setProperty('--app-font', appFont);
-                    document.querySelectorAll('#font-select-container .month-opt-btn').forEach(b => b.classList.remove('selected'));
-                    btn.classList.add('selected');
-                };
-                fontContainer.appendChild(btn);
-            });
-
-            const monthContainer = document.getElementById('month-select-container'); monthContainer.innerHTML = '';
-            for(let i=1; i<=12; i++) {
-                const btn = document.createElement('button'); btn.className = 'month-opt-btn';
-                if(i === appStartMonth) btn.classList.add('selected');
-                btn.textContent = `${i}月`;
-                btn.onclick = () => {
-                    try { localStorage.setItem('appStartMonth', i); } catch(e){}
-                    appStartMonth = i;
-                    document.querySelectorAll('#month-select-container .month-opt-btn').forEach(b => b.classList.remove('selected'));
-                    btn.classList.add('selected'); initMonthScreen(); 
-                };
-                monthContainer.appendChild(btn);
-            }
-
-            const wOnBtn = document.getElementById('watermark-on-btn'); const wOffBtn = document.getElementById('watermark-off-btn');
-            wOnBtn.classList.remove('selected'); wOffBtn.classList.remove('selected');
-            if(showWatermark) wOnBtn.classList.add('selected'); else wOffBtn.classList.add('selected');
-
-            wOnBtn.onclick = () => {
-                showWatermark = true; try { localStorage.setItem('showWatermark', 'true'); } catch(e){}
-                wOnBtn.classList.add('selected'); wOffBtn.classList.remove('selected');
-            };
-            wOffBtn.onclick = () => {
-                showWatermark = false; try { localStorage.setItem('showWatermark', 'false'); } catch(e){}
-                wOffBtn.classList.add('selected'); wOnBtn.classList.remove('selected');
-            };
-        }
-
-        /* === 4. カレンダーとチケットの描画 === */
-        function openMonth(month, year) {
-            selectedMonth = month; currentRenderYear = year;
-            monthTitle.textContent = `${monthNames[month - 1]} ${year}`;
-            monthScreen.style.display = 'none'; homeScreen.style.display = 'flex';
-            renderCalendarAndTickets();
-        }
-
-        function renderCalendarAndTickets() {
-            calendarElement.innerHTML = ''; ticketsArea.innerHTML = '';
-            const firstDayOfMonth = new Date(currentRenderYear, selectedMonth - 1, 1);
-            const lastDayOfMonth = new Date(currentRenderYear, selectedMonth, 0);
-            const startDate = new Date(firstDayOfMonth); startDate.setDate(startDate.getDate() - startDate.getDay());
-            const endDate = new Date(lastDayOfMonth); endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
-
-            let currentDate = new Date(startDate); let weekDatesArray = []; let weekNum = 1;
-
-            while (currentDate <= endDate) {
-                const boxYear = currentDate.getFullYear(); const boxMonth = currentDate.getMonth() + 1; const boxDate = currentDate.getDate();
-                const dataKey = `${boxYear}-${boxMonth}-${boxDate}`;
-                const dayBox = document.createElement('div'); dayBox.className = 'day-box';
-                if (boxMonth !== selectedMonth) dayBox.classList.add('out-of-month');
-
-                const isToday = (boxYear === currentYearReal && boxMonth === currentMonthNumReal && boxDate === currentDateReal);
-                if (isToday) dayBox.classList.add('today');
-                if (recordedData[dataKey] && recordedData[dataKey].exists) dayBox.classList.add('recorded');
-
-                const dayText = document.createElement('span'); dayText.textContent = boxDate; dayBox.appendChild(dayText);
-                
-                dayBox.onclick = async () => {
-                    if (isToday) {
-                        const chunks = await getFullChunksForDate(dataKey);
-                        const currentTotal = chunks.reduce((sum, item) => sum + item.duration, 0);
-                        if (currentTotal < MAX_RECORD_TIME) {
-                            openCameraScreen(boxYear, boxMonth, boxDate);
-                            return;
-                        }
-                    }
-                    
-                    if (recordedData[dataKey] && recordedData[dataKey].exists) { 
-                        startPlayback([dataKey]); 
-                        return; 
-                    }
-                    
-                    if (!isToday) { 
-                        if (currentDate > todayResetObj) alert('未来に記憶があったら'); 
-                        else alert('我々の今は、過去にはないようです。'); 
-                    }
-                };
-                
-                calendarElement.appendChild(dayBox); weekDatesArray.push(new Date(currentDate));
-                if (currentDate.getDay() === 6) { createTicket(weekNum, weekDatesArray); weekNum++; weekDatesArray = []; }
-                currentDate.setDate(currentDate.getDate() + 1);
+        function loadThemeDesign() {
+            const saved = JSON.parse(localStorage.getItem('photo_calendar_design')) || {};
+            if (saved.bgColor) { rootVars.setProperty('--bg-color', saved.bgColor); bgPicker.value = saved.bgColor; }
+            if (saved.textColor) { rootVars.setProperty('--text-color', saved.textColor); textPicker.value = saved.textColor; }
+            if (saved.fontKey && fontsMap[saved.fontKey]) { 
+                rootVars.setProperty('--font-family', fontsMap[saved.fontKey]); 
+                fontSelect.value = saved.fontKey; 
             }
         }
 
-        function createTicket(weekNum, datesInWeek) {
-            const startDay = datesInWeek[0]; const endDay = datesInWeek[6];
-            const startM = monthNames[startDay.getMonth()].substring(0, 3); const endM = monthNames[endDay.getMonth()].substring(0, 3);
-            let dateLabel = (startDay.getMonth() === endDay.getMonth()) ? `${startM} ${startDay.getDate()} - ${endDay.getDate()}` : `${startM} ${startDay.getDate()} - ${endM} ${endDay.getDate()}`;
+        function saveThemeDesign() {
+            localStorage.setItem('photo_calendar_design', JSON.stringify({
+                bgColor: bgPicker.value,
+                textColor: textPicker.value,
+                fontKey: fontSelect.value
+            }));
+        }
 
-            let validKeys = [];
-            datesInWeek.forEach(d => {
-                const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-                if (recordedData[key] && recordedData[key].exists) validKeys.push(key);
-            });
-            const recordedCount = validKeys.length;
+        function getBrightness(hex) {
+            let h = hex.replace('#', '');
+            if (h.length === 3) h = h.split('').map(c => c + c).join('');
+            const r = parseInt(h.substring(0, 2), 16);
+            const g = parseInt(h.substring(2, 4), 16);
+            const b = parseInt(h.substring(4, 6), 16);
+            return (r * 299 + g * 587 + b * 114) / 1000;
+        }
 
-            // ★修正：土曜日（最後の日）の録画が「20秒完全に完了しているか」を判定基準にする
-            const lastDateKey = `${endDay.getFullYear()}-${endDay.getMonth() + 1}-${endDay.getDate()}`;
-            const isLastDayComplete = recordedData[lastDateKey] && recordedData[lastDateKey].isComplete; 
-            const isWeekOver = todayResetObj > endDay; 
-            const isViewable = isLastDayComplete || isWeekOver;
+        bgPicker.addEventListener('input', (e) => { 
+            const newBg = e.target.value;
+            const currentText = textPicker.value;
 
-            const ticket = document.createElement('div'); ticket.className = 'ticket';
-            if (!isViewable) ticket.classList.add('locked');
-
-            ticket.innerHTML = `
-                <div class="ticket-info"><div class="ticket-week">WEEK ${weekNum}</div><div class="ticket-dates">${dateLabel}</div></div>
-                <div class="ticket-play">
-                    ${recordedCount > 0 && isViewable ? `<span class="record-badge">${recordedCount} REC</span>` : ''}
-                    ${isViewable && recordedCount > 0 ? `<div class="action-btns"><button class="ticket-action-btn play-btn">▶</button><button class="ticket-action-btn save-btn">▼</button></div>` : (isViewable ? '▶' : '-')}
-                </div>
-            `;
+            rootVars.setProperty('--bg-color', newBg); 
             
-            if (isViewable && recordedCount > 0) {
-                const playBtn = ticket.querySelector('.play-btn'); const saveBtn = ticket.querySelector('.save-btn');
-                playBtn.onclick = (e) => { e.stopPropagation(); startPlayback(validKeys); };
-                saveBtn.onclick = (e) => { e.stopPropagation(); startExport(validKeys, dateLabel); };
-                ticket.onclick = () => { startPlayback(validKeys); };
-            } else if (isViewable && recordedCount === 0) { ticket.onclick = () => alert('この週には記録がありません。');
-            } else { ticket.onclick = () => alert('週末の記録を終えるか、次の週になるまでのお楽しみです。'); }
-            ticketsArea.appendChild(ticket);
-        }
+            const bgBrightness = getBrightness(newBg);
+            const textBrightness = getBrightness(currentText);
+            const brightnessDiff = Math.abs(bgBrightness - textBrightness);
 
-        /* === 5. 撮影システム === */
-        let isRecording = false; let totalRecordTime = 0; let timerInterval; let mediaRecorder; let recordedChunks = [];
-        const MAX_RECORD_TIME = 20000;
-        let currentExistingChunks = []; 
-        let segmentStartTime = 0;
-        let cameraStream = null;
-        
-        // ★追加：タイマーの正確性を担保するため、録画中のセグメント時間を記録
-        let currentSegmentDuration = 0; 
-
-        async function openCameraScreen(y, m, d) {
-            recordTargetYear = y; recordTargetMonth = m; recordTargetDay = d;
-            const dataKey = `${y}-${m}-${d}`;
-            currentRecordingDateStr = `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`;
-            cameraDateDisplay.textContent = `${monthNames[m-1].substring(0,3)} ${d} - REC`;
-            
-            if (showWatermark) { cameraWatermark.textContent = currentRecordingDateStr; cameraWatermark.style.display = 'block'; } 
-            else { cameraWatermark.style.display = 'none'; }
-
-            homeScreen.style.display = 'none'; cameraScreen.style.display = 'flex';
-            
-            recordBtn.disabled = true; 
-            recordBtn.classList.remove('recording');
-            cameraLoading.style.display = 'block';
-            cameraView.style.opacity = '0';
-            isRecording = false;
-            currentSegmentDuration = 0;
-
-            currentExistingChunks = await getFullChunksForDate(dataKey);
-            totalRecordTime = currentExistingChunks.reduce((sum, item) => sum + item.duration, 0);
-            
-            progressBar.style.width = (totalRecordTime / MAX_RECORD_TIME) * 100 + '%';
-            recordTimer.textContent = `00:${Math.floor(totalRecordTime / 1000).toString().padStart(2, '0')} / 00:20`;
-
-            startCamera(); 
-        }
-
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { aspectRatio: 16/9, facingMode: "environment" }, audio: true });
-                cameraView.srcObject = stream;
-                cameraStream = stream;
-                
-                cameraView.onloadedmetadata = () => {
-                    cameraLoading.style.display = 'none';
-                    cameraView.style.opacity = '1';
-                    if (totalRecordTime < MAX_RECORD_TIME) {
-                        recordBtn.disabled = false;
-                    }
-                };
-            } catch (err) { alert("カメラの起動に失敗しました。"); }
-        }
-
-        function stopCamera() { 
-            if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-            if (cameraView.srcObject) cameraView.srcObject = null;
-        }
-
-        function stopRecordingAndSave() {
-            return new Promise((resolve) => {
-                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                    resolve();
-                    return;
-                }
-                mediaRecorder.onstop = async () => {
-                    const mimeType = mediaRecorder.mimeType || (recordedChunks[0] && recordedChunks[0].type) || '';
-                    const blob = new Blob(recordedChunks, { type: mimeType }); 
-                    
-                    // ★修正：放置時間バグを防ぐため、Date.now()ではなく100msごとに加算した実録画時間を採用
-                    const durationToAdd = Math.min(currentSegmentDuration, MAX_RECORD_TIME - totalRecordTime);
-                    
-                    if (durationToAdd > 100) { 
-                        currentExistingChunks.push({ blob: blob, duration: durationToAdd });
-                        totalRecordTime += durationToAdd;
-                        const dataKey = `${recordTargetYear}-${recordTargetMonth}-${recordTargetDay}`;
-                        try { 
-                            await saveVideoToDB(dataKey, currentExistingChunks); 
-                            recordedData[dataKey] = { exists: true, isComplete: totalRecordTime >= MAX_RECORD_TIME }; 
-                        } catch(e) { console.error("保存失敗", e); }
-                    }
-                    currentSegmentDuration = 0;
-                    resolve();
-                };
-                mediaRecorder.stop();
-            });
-        }
-
-        recordBtn.onclick = async function() {
-            if (!cameraStream) return;
-            recordBtn.disabled = true; 
-
-            if (isRecording) {
-                isRecording = false; 
-                recordBtn.classList.remove('recording'); 
-                clearInterval(timerInterval);
-                
-                await stopRecordingAndSave(); 
-                
-                progressBar.style.width = (totalRecordTime / MAX_RECORD_TIME) * 100 + '%';
-                recordTimer.textContent = `00:${Math.floor(totalRecordTime / 1000).toString().padStart(2, '0')} / 00:20`;
-                
-                if (totalRecordTime >= MAX_RECORD_TIME) {
-                    stopCamera();
-                    cameraScreen.style.display = 'none';
-                    finishScreen.style.display = 'flex';
-                } else {
-                    recordBtn.disabled = false; 
-                }
+            if (brightnessDiff < 125) {
+                const autoTextColor = bgBrightness > 128 ? '#111111' : '#eeeeee';
+                rootVars.setProperty('--text-color', autoTextColor);
+                textPicker.value = autoTextColor;
             } else {
-                if (totalRecordTime >= MAX_RECORD_TIME) return;
-                isRecording = true; 
-                recordBtn.classList.add('recording');
-                recordedChunks = [];
-                currentSegmentDuration = 0;
-                
-                mediaRecorder = new MediaRecorder(cameraStream);
-                mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunks.push(event.data); };
-                mediaRecorder.start(200);
-                recordBtn.disabled = false;
+                rootVars.setProperty('--text-color', currentText);
+            }
+            saveThemeDesign(); 
+        });
 
-                timerInterval = setInterval(() => {
-                    // ★修正：スリープ放置バグを防ぐため、フロントのタイマーで直接秒数を刻む
-                    currentSegmentDuration += 100;
-                    const displayTime = totalRecordTime + currentSegmentDuration;
-                    progressBar.style.width = (displayTime / MAX_RECORD_TIME) * 100 + '%';
-                    recordTimer.textContent = `00:${Math.floor(displayTime / 1000).toString().padStart(2, '0')} / 00:20`;
+        textPicker.addEventListener('input', (e) => { 
+            rootVars.setProperty('--text-color', e.target.value); 
+            saveThemeDesign(); 
+        });
+        
+        fontSelect.addEventListener('change', (e) => { 
+            rootVars.setProperty('--font-family', fontsMap[e.target.value]); 
+            saveThemeDesign(); 
+        });
+
+        const settingsOverlay = document.getElementById('settings-overlay');
+        document.getElementById('settings-btn').onclick = (e) => {
+            e.stopPropagation();
+            settingsOverlay.style.display = 'flex';
+            setTimeout(() => settingsOverlay.classList.add('open'), 10);
+        };
+        document.getElementById('settings-close-btn').onclick = () => {
+            settingsOverlay.classList.remove('open');
+            setTimeout(() => settingsOverlay.style.display = 'none', 300);
+        };
+
+        // --- テーマ切り替えUIの管理 ---
+        const themeOverlay = document.getElementById('theme-overlay');
+        const themeList = document.getElementById('theme-list');
+        const currentThemeNameSpan = document.getElementById('current-theme-name');
+
+        function renderThemeList() {
+            themeList.innerHTML = '';
+            themes.forEach(t => {
+                const li = document.createElement('li');
+                li.className = 'theme-item' + (t.id === currentThemeId ? ' active' : '');
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = t.name;
+                li.appendChild(nameSpan);
+
+                if (themes.length > 1) {
+                    const delBtn = document.createElement('span');
+                    delBtn.className = 'theme-delete-btn';
+                    delBtn.innerHTML = '×';
+                    delBtn.onclick = async (e) => {
+                        e.stopPropagation(); 
+                        if (confirm(`テーマ「${t.name}」を削除しますか？\n※保存された写真データもすべて消去されます。`)) {
+                            
+                            for (let m = 1; m <= 12; m++) {
+                                const mStr = String(m).padStart(2, '0');
+                                const key = t.id === 'default' ? `photo_calendar_${currentYear}_${mStr}` : `photo_calendar_${t.id}_${currentYear}_${mStr}`;
+                                await deletePhotoData(key);
+                            }
+                            
+                            themes = themes.filter(theme => theme.id !== t.id);
+                            localStorage.setItem('photo_calendar_themes', JSON.stringify(themes));
+                            
+                            if (currentThemeId === t.id) {
+                                switchTheme(themes[0].id);
+                            } else {
+                                renderThemeList();
+                            }
+                        }
+                    };
+                    li.appendChild(delBtn);
+                }
+
+                li.onclick = (e) => {
+                    if(e.target.classList.contains('theme-delete-btn')) return;
                     
-                    if (displayTime >= MAX_RECORD_TIME) {
-                        clearInterval(timerInterval);
-                        recordBtn.click(); 
-                    }
-                }, 100);
+                    switchTheme(t.id);
+                    themeOverlay.classList.remove('open');
+                    setTimeout(() => themeOverlay.style.display = 'none', 300);
+                };
+                themeList.appendChild(li);
+            });
+            const currentTheme = themes.find(t => t.id === currentThemeId) || themes[0];
+            currentThemeNameSpan.textContent = currentTheme.name;
+        }
+
+        document.getElementById('theme-select-btn').onclick = () => {
+            renderThemeList();
+            themeOverlay.style.display = 'flex';
+            setTimeout(() => themeOverlay.classList.add('open'), 10);
+        };
+
+        document.getElementById('theme-close-btn').onclick = () => {
+            themeOverlay.classList.remove('open');
+            setTimeout(() => themeOverlay.style.display = 'none', 300);
+        };
+
+        document.getElementById('add-theme-btn').onclick = () => {
+            const name = prompt('テーマ名を入力してください');
+            if (name) {
+                const id = 'theme_' + Date.now();
+                themes.push({id, name});
+                localStorage.setItem('photo_calendar_themes', JSON.stringify(themes));
+                switchTheme(id);
             }
         };
 
-        // ★追加：アプリがバックグラウンド（裏側）に回った際に、録画を強制的に止めて安全に保存する
-        document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'hidden') {
-                if (isRecording) {
-                    isRecording = false; 
-                    recordBtn.classList.remove('recording'); 
-                    clearInterval(timerInterval);
-                    await stopRecordingAndSave(); 
+        async function switchTheme(id) { 
+            currentThemeId = id;
+            localStorage.setItem('photo_calendar_current_theme', currentThemeId);
+            renderThemeList();
+            
+            cardObjects.forEach(obj => {
+                if(obj.intervalId) clearInterval(obj.intervalId);
+                obj.element.remove();
+            });
+            cardObjects = [];
+            createMonthCards();
+            updateAllSlideshows();
+            
+            await updateAllCalendarGrids(); 
+
+            if (document.body.classList.contains('calendar-open')) {
+                calendarMonthText.textContent = `${currentYear} . ${String(currentMonth).padStart(2, '0')}`;
+            }
+
+            if (galleryContainer.style.display === 'block') {
+                renderGallery();
+            }
+
+            setTimeout(() => {
+                const targetCard = cardObjects.find(c => c.month === currentMonth);
+                if (targetCard) {
+                    targetCard.element.scrollIntoView({ block: 'center', inline: 'nearest' });
                 }
-                if (cameraScreen.style.display === 'flex') {
-                    stopCamera(); 
-                    cameraScreen.style.display = 'none'; 
-                    homeScreen.style.display = 'flex'; 
-                    renderCalendarAndTickets(); 
-                    initMonthScreen();
-                }
+            }, 50);
+        }
+
+        // --- コア要素の取得と変数 ---
+        const scrollContainer = document.getElementById('scroll-container');
+        const calendarWrapper = document.getElementById('calendar-wrapper');
+        const calendarArea = document.getElementById('calendar-area');
+        const galleryContainer = document.getElementById('gallery-container');
+        const galleryGrid = document.getElementById('gallery-grid');
+        const galleryCloseBtn = document.getElementById('gallery-close-btn');
+        const toggleViewBtn = document.getElementById('toggle-view-btn');
+        const backToMonthsBtn = document.getElementById('back-to-months-btn'); 
+        const calendarMonthText = document.getElementById('calendar-month-text');
+        const exportBtn = document.getElementById('export-btn');
+        const fileInput = document.getElementById('file-input');
+        
+        const calPrev = document.getElementById('calendar-prev');
+        const calCurrent = document.getElementById('calendar-current');
+        const calNext = document.getElementById('calendar-next');
+
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImage = document.getElementById('lightbox-image');
+        const lightboxDate = document.getElementById('lightbox-date');
+        const lightboxContainerDOM = document.getElementById('lightbox-container');
+        const lightboxCloseBtn = document.getElementById('lightbox-close-btn');
+        
+        const actionSheet = document.getElementById('action-sheet');
+        const actionChangeBtn = document.getElementById('action-change-btn');
+        const actionDeleteBtn = document.getElementById('action-delete-btn');
+        const actionCancelBtn = document.getElementById('action-cancel-btn');
+
+        const exportResultOverlay = document.getElementById('export-result-overlay');
+        const exportResultImg = document.getElementById('export-result-img');
+        const exportResultCloseBtn = document.getElementById('export-result-close-btn');
+
+        let currentYear = 2026;
+        let currentMonth = 5;
+        let currentSelectedTile = null;
+        let cardObjects = [];
+        let isSyncingScroll = false;
+
+        let activeMonthPhotos = [];
+        let currentPhotoIndex = -1;
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let scrollTimeoutId = null;
+
+        // --- UI制御（画面の開閉など） ---
+        
+        calendarArea.addEventListener('click', (e) => {
+            if (e.target === calendarArea || e.target.classList.contains('calendar-scroll-wrapper')) {
+                document.body.classList.remove('calendar-open');
             }
         });
 
-        document.getElementById('finish-ok-btn').onclick = () => {
-            finishScreen.style.display = 'none'; homeScreen.style.display = 'flex';
-            renderCalendarAndTickets(); initMonthScreen();
-        };
+        backToMonthsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.body.classList.remove('calendar-open');
+        });
 
-        /* === 6. 再生画面 === */
-        let playlistUrls = [];
-        let currentPlayIndex = 0;
+        toggleViewBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            renderGallery();
+            galleryContainer.style.display = 'block';
+        });
 
-        async function startPlayback(keys) {
-            playlistUrls = [];
-            for (let key of keys) {
-                const chunks = await getFullChunksForDate(key);
-                const parts = key.split('-');
-                const formattedDate = `${parts[0]}.${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
-                chunks.forEach(item => {
-                    playlistUrls.push({ key: key, dateStr: formattedDate, url: URL.createObjectURL(item.blob) });
-                });
-            }
-            if (playlistUrls.length === 0) { alert("再生できる動画が見つかりませんでした。"); return; }
-            homeScreen.style.display = 'none'; playbackScreen.style.display = 'flex';
-            currentPlayIndex = 0; playNextInPlaylist();
-        }
+        galleryCloseBtn.addEventListener('click', () => {
+            galleryContainer.style.display = 'none';
+        });
 
-        function playNextInPlaylist() {
-            if (currentPlayIndex >= playlistUrls.length) { closePlaybackScreen(); return; }
-            const currentItem = playlistUrls[currentPlayIndex];
+        // ★変更: バグを回避するための「ダミー撮影」を挟んだ2段構えの書き出し処理
+        exportBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
             
-            if (playlistUrls.length > 1) playbackDateDisplay.textContent = `WEEKLY MOVIE`;
-            else { const parts = currentItem.key.split('-'); playbackDateDisplay.textContent = `${monthNames[parseInt(parts[1])-1].substring(0,3)} ${parts[2]} - PLAY`; }
-
-            if (showWatermark) { playbackWatermark.textContent = currentItem.dateStr; playbackWatermark.style.display = 'block'; } 
-            else { playbackWatermark.style.display = 'none'; }
-
-            playbackLoading.style.display = 'block';
-            playbackView.style.opacity = '0';
+            exportBtn.textContent = "WAIT...";
+            exportBtn.style.pointerEvents = "none";
             
-            playbackView.src = currentItem.url;
+            const uiElements = [
+                backToMonthsBtn,
+                document.getElementById('settings-btn'),
+                toggleViewBtn,
+                exportBtn
+            ];
+            uiElements.forEach(el => el.style.opacity = '0');
             
-            playbackView.onplaying = () => {
-                playbackLoading.style.display = 'none';
-                playbackView.style.opacity = '1';
-            };
+            document.body.classList.add('export-active');
+            calendarWrapper.scrollLeft = 0;
 
-            playbackView.play().catch(e => console.log("自動再生ブロック:", e));
-            playbackView.onended = () => { currentPlayIndex++; playNextInPlaylist(); };
-        }
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-        playbackContainer.onclick = () => { if (playbackView.paused) playbackView.play(); else playbackView.pause(); };
-
-        function closePlaybackScreen() {
-            playbackView.pause(); playbackView.onended = null; playbackView.onplaying = null;
-            playlistUrls.forEach(item => URL.revokeObjectURL(item.url)); playlistUrls = [];
-            playbackView.src = ""; playbackScreen.style.display = 'none'; homeScreen.style.display = 'flex';
-        }
-
-        document.getElementById('playback-back-btn').onclick = closePlaybackScreen;
-
-        /* === 7. 書き出し（エクスポート）システム === */
-        const exportTitle = document.getElementById('export-title');
-        const exportDesc = document.getElementById('export-desc');
-        const exportProgressBar = document.getElementById('export-progress-bar');
-        const exportProgressContainer = document.getElementById('export-progress-container');
-        const exportDownloadLink = document.getElementById('export-download-link');
-        const exportReturnBtn = document.getElementById('export-return-btn');
-        
-        const exportCanvas = document.getElementById('export-canvas');
-        const exportCanvasCtx = exportCanvas.getContext('2d');
-
-        async function startExport(keys, dateLabel) {
-            homeScreen.style.display = 'none'; exportScreen.style.display = 'flex';
-            exportTitle.textContent = "EXPORTING..."; exportDesc.innerHTML = "1週間分をまとめています<br>結構待つよごめんね";
-            exportProgressBar.style.width = "0%"; exportProgressContainer.style.display = "block";
-            exportDownloadLink.style.display = "none"; exportReturnBtn.style.display = "none";
-            exportCanvas.style.display = "block"; 
-
-            const exportVideo = document.createElement('video');
-            exportVideo.playsInline = true; exportVideo.muted = false; 
-
-            let audioCtx = null; let dest = null; let dummyOsc = null;
             try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                dest = audioCtx.createMediaStreamDestination();
-                dummyOsc = audioCtx.createOscillator();
-                const dummyGain = audioCtx.createGain();
-                dummyGain.gain.value = 0.0001; 
-                dummyOsc.connect(dummyGain); dummyGain.connect(dest); dummyOsc.start();
-                const source = audioCtx.createMediaElementSource(exportVideo);
-                source.connect(dest);
-            } catch(e) { console.log("AudioContext Error"); }
+                // 1. Safari等での画像抜けバグを防ぐため、一度「ダミー」で空の撮影を行う
+                await htmlToImage.toPng(calendarArea);
 
-            const exportStream = exportCanvas.captureStream(30);
-            if (dest) dest.stream.getAudioTracks().forEach(t => exportStream.addTrack(t));
+                // 2. 直後に「本番」の高画質撮影を行う
+                const dataUrl = await htmlToImage.toPng(calendarArea, {
+                    backgroundColor: getComputedStyle(document.body).backgroundColor || '#000000',
+                    pixelRatio: 2
+                });
 
-            let mime = 'video/webm';
-            if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
-            const exportRecorder = new MediaRecorder(exportStream, { mimeType: mime });
-            const exportChunks = [];
-            exportRecorder.ondataavailable = e => { if(e.data.size > 0) exportChunks.push(e.data); };
+                exportResultImg.src = dataUrl;
+                exportResultOverlay.style.display = 'flex';
+                setTimeout(() => exportResultOverlay.classList.add('open'), 10);
 
-            let allExportItems = [];
-            for (let key of keys) {
-                const chunks = await getFullChunksForDate(key);
-                const parts = key.split('-');
-                const dateStr = `${parts[0]}.${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
-                chunks.forEach(item => {
-                    allExportItems.push({ key: key, dateStr: dateStr, blob: item.blob });
+            } catch (error) {
+                console.error(error);
+                alert('画像の書き出しに失敗しました。詳細: ' + (error.message || error));
+            } finally {
+                document.body.classList.remove('export-active');
+                uiElements.forEach(el => el.style.opacity = '0.7');
+                syncCalendarPosition();
+                
+                exportBtn.textContent = "EXPORT";
+                exportBtn.style.pointerEvents = "auto";
+            }
+        });
+
+        exportResultCloseBtn.addEventListener('click', () => {
+            exportResultOverlay.classList.remove('open');
+            setTimeout(() => {
+                exportResultOverlay.style.display = 'none';
+                exportResultImg.src = ""; 
+            }, 300);
+        });
+
+        function renderGallery() {
+            galleryGrid.innerHTML = '';
+            const storageKey = getStorageKey(currentYear, currentMonth);
+            getPhotoData(storageKey).then(savedPhotos => {
+                const photoDays = Object.keys(savedPhotos).sort((a,b) => a - b);
+                const photoCount = photoDays.length;
+                
+                let cols = 3; 
+                if (photoCount === 0) cols = 1;
+                else if (photoCount === 1) cols = 1;
+                else if (photoCount <= 4) cols = 2;
+                else if (photoCount <= 9) cols = 3;
+                else if (photoCount <= 16) cols = 4;
+                else if (photoCount <= 25) cols = 5;
+                else cols = 6;
+
+                galleryGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+                photoDays.forEach(day => {
+                    const tile = document.createElement('div');
+                    tile.classList.add('gallery-tile');
+                    const img = document.createElement('img');
+                    img.src = savedPhotos[day];
+                    tile.appendChild(img);
+                    
+                    tile.addEventListener('click', () => {
+                        collectActiveMonthPhotos();
+                        currentPhotoIndex = activeMonthPhotos.findIndex(p => p.day == day);
+                        lightboxImage.src = activeMonthPhotos[currentPhotoIndex].src;
+                        lightboxDate.textContent = `${currentMonth}.${day}`;
+                        lightbox.style.display = 'flex';
+                        setTimeout(() => lightbox.classList.add('open'), 10);
+                    });
+                    
+                    galleryGrid.appendChild(tile);
+                });
+            });
+        }
+
+        // --- ロジック（カレンダー・月カード） ---
+        
+        function createMonthCards() {
+            const spacers = scrollContainer.querySelectorAll('.scroll-spacer');
+            for (let m = 1; m <= 12; m++) {
+                const card = document.createElement('div');
+                card.classList.add('month-card');
+                card.dataset.month = m;
+                if (m === currentMonth) card.classList.add('active');
+
+                const title = document.createElement('div');
+                title.classList.add('card-title');
+                title.textContent = `${currentYear} . ${String(m).padStart(2, '0')}`;
+                card.appendChild(title);
+
+                const img1 = document.createElement('img');
+                img1.classList.add('card-slideshow-img');
+                const img2 = document.createElement('img');
+                img2.classList.add('card-slideshow-img');
+                card.appendChild(img1);
+                card.appendChild(img2);
+
+                scrollContainer.insertBefore(card, spacers[1]);
+
+                cardObjects.push({
+                    month: m,
+                    element: card,
+                    images: [img1, img2],
+                    intervalId: null
+                });
+
+                card.addEventListener('click', () => {
+                    if (card.classList.contains('active')) {
+                        document.body.classList.add('calendar-open');
+                        calendarMonthText.textContent = `${currentYear} . ${String(currentMonth).padStart(2, '0')}`;
+                        syncCalendarPosition();
+                    } else {
+                        isSyncingScroll = true;
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                        currentMonth = m;
+                        applyLayerEffects();
+                        updateAllCalendarGrids();
+                        setTimeout(() => { isSyncingScroll = false; syncCalendarPosition(); }, 350);
+                    }
                 });
             }
+            setTimeout(applyLayerEffects, 150);
+        }
 
-            if (allExportItems.length === 0) { alert("動画が見つかりませんでした。"); exportScreen.style.display = 'none'; homeScreen.style.display = 'flex'; return; }
+        async function startCardSlideshow(cardObj) { 
+            if (cardObj.intervalId) clearInterval(cardObj.intervalId);
+            
+            const storageKey = getStorageKey(currentYear, cardObj.month);
+            const savedPhotos = await getPhotoData(storageKey); 
+            const photoUrls = Object.values(savedPhotos);
 
-            let currentIndex = 0; let isExporting = true; let exportDateStr = "";
+            const imgElements = cardObj.images;
+            
+            if (photoUrls.length === 0) {
+                imgElements[0].classList.remove('fade-in');
+                imgElements[1].classList.remove('fade-in');
+                return;
+            }
 
-            function exportDrawLoop() {
-                if (!isExporting) return;
-                exportCanvasCtx.fillStyle = '#000'; exportCanvasCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+            let photoIdx = 0;
+            let activeElementIdx = 0;
 
-                if (exportVideo.readyState >= 2 && !exportVideo.paused && !exportVideo.ended) {
-                    const vw = exportVideo.videoWidth; const vh = exportVideo.videoHeight;
-                    if (vw > 0 && vh > 0) {
-                        let sWidth = vw, sHeight = vw * (9 / 16), sx = 0, sy = (vh - sHeight) / 2;
-                        if (vw / vh > 16 / 9) { sHeight = vh; sWidth = vh * (16 / 9); sx = (vw - sWidth) / 2; sy = 0; }
-                        exportCanvasCtx.drawImage(exportVideo, sx, sy, sWidth, sHeight, 0, 0, exportCanvas.width, exportCanvas.height);
+            imgElements[activeElementIdx].src = photoUrls[photoIdx];
+            imgElements[activeElementIdx].classList.add('fade-in');
+
+            if (photoUrls.length > 1) {
+                cardObj.intervalId = setInterval(() => {
+                    photoIdx = (photoIdx + 1) % photoUrls.length;
+                    const nextElementIdx = 1 - activeElementIdx;
+
+                    imgElements[nextElementIdx].src = photoUrls[photoIdx];
+                    imgElements[nextElementIdx].classList.add('fade-in');
+                    imgElements[activeElementIdx].classList.remove('fade-in');
+
+                    activeElementIdx = nextElementIdx;
+                }, 4000);
+            }
+        }
+
+        function updateAllSlideshows() {
+            cardObjects.forEach(cardObj => startCardSlideshow(cardObj));
+        }
+
+        async function drawGrid(targetGrid, year, month) { 
+            targetGrid.innerHTML = '';
+            if (month < 1 || month > 12) {
+                targetGrid.style.visibility = 'hidden';
+                return;
+            }
+            targetGrid.style.visibility = 'visible';
+
+            const storageKey = getStorageKey(year, month);
+            const savedPhotos = await getPhotoData(storageKey); 
+
+            const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+            const daysInMonth = new Date(year, month, 0).getDate();
+
+            for (let i = 0; i < startDayOfWeek; i++) {
+                const blankTile = document.createElement('div');
+                blankTile.classList.add('day-tile', 'blank-tile');
+                targetGrid.appendChild(blankTile);
+            }
+
+            for (let i = 1; i <= daysInMonth; i++) {
+                const tile = document.createElement('div');
+                tile.classList.add('day-tile');
+                tile.dataset.day = i;
+                
+                const numberSpan = document.createElement('span');
+                numberSpan.classList.add('day-number');
+                numberSpan.textContent = i;
+                tile.appendChild(numberSpan);
+
+                if (savedPhotos[i]) {
+                    const img = document.createElement('img');
+                    img.src = savedPhotos[i];
+                    tile.appendChild(img);
+                    tile.classList.add('has-image');
+                }
+
+                tile.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentSelectedTile = tile;
+                    
+                    if (tile.classList.contains('has-image')) {
+                        collectActiveMonthPhotos();
+                        currentPhotoIndex = activeMonthPhotos.findIndex(p => p.day == tile.dataset.day);
+
+                        lightboxImage.src = activeMonthPhotos[currentPhotoIndex].src;
+                        lightboxDate.textContent = `${month}.${activeMonthPhotos[currentPhotoIndex].day}`;
                         
-                        if (showWatermark && exportDateStr) {
-                            exportCanvasCtx.fillStyle = "rgba(244, 235, 208, 0.35)";
-                            exportCanvasCtx.font = `normal 34px ${appFont}`;
-                            exportCanvasCtx.textAlign = "right";
-                            exportCanvasCtx.textBaseline = "bottom"; 
-                            exportCanvasCtx.shadowColor = "rgba(0,0,0,0.5)";
-                            exportCanvasCtx.shadowBlur = 4;
-                            exportCanvasCtx.fillText(exportDateStr, exportCanvas.width - 30, exportCanvas.height - 20);
-                            exportCanvasCtx.shadowBlur = 0;
+                        lightbox.style.display = 'flex';
+                        
+                        if (lightboxImage.complete) {
+                            adjustLightboxDatePosition();
                         }
+
+                        setTimeout(() => {
+                            lightbox.classList.add('open');
+                        }, 10);
+                    } else {
+                        fileInput.click();
+                    }
+                });
+
+                targetGrid.appendChild(tile);
+            }
+
+            const totalTiles = startDayOfWeek + daysInMonth;
+            const remainTiles = (7 - (totalTiles % 7)) % 7;
+            for (let i = 0; i < remainTiles; i++) {
+                const blankTile = document.createElement('div');
+                blankTile.classList.add('day-tile', 'blank-tile');
+                targetGrid.appendChild(blankTile);
+            }
+        }
+
+        function collectActiveMonthPhotos() {
+            activeMonthPhotos = [];
+            const tiles = calCurrent.querySelectorAll('.day-tile:not(.blank-tile)');
+            tiles.forEach(tile => {
+                if (tile.classList.contains('has-image')) {
+                    activeMonthPhotos.push({
+                        day: tile.dataset.day,
+                        src: tile.querySelector('img').src,
+                        tileElement: tile
+                    });
+                }
+            });
+        }
+
+        function changeLightBoxPhoto(direction) {
+            if (activeMonthPhotos.length <= 1) return;
+
+            if (direction === 'next') {
+                currentPhotoIndex = (currentPhotoIndex + 1) % activeMonthPhotos.length;
+            } else if (direction === 'prev') {
+                currentPhotoIndex = (currentPhotoIndex - 1 + activeMonthPhotos.length) % activeMonthPhotos.length;
+            }
+
+            lightboxImage.style.opacity = '0';
+            setTimeout(() => {
+                lightboxImage.src = activeMonthPhotos[currentPhotoIndex].src;
+                lightboxDate.textContent = `${currentMonth}.${activeMonthPhotos[currentPhotoIndex].day}`;
+                currentSelectedTile = activeMonthPhotos[currentPhotoIndex].tileElement;
+                
+                if (lightboxImage.complete) {
+                    adjustLightboxDatePosition();
+                }
+
+                lightboxImage.style.opacity = '1';
+            }, 150);
+        }
+
+        // --- スワイプとライトボックス操作 ---
+        lightboxContainerDOM.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, {passive: true});
+
+        lightboxContainerDOM.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipeGesture();
+        }, {passive: true});
+
+        lightboxContainerDOM.addEventListener('mousedown', (e) => {
+            touchStartX = e.screenX;
+        });
+        lightboxContainerDOM.addEventListener('mouseup', (e) => {
+            touchEndX = e.screenX;
+            handleSwipeGesture();
+        });
+
+        function handleSwipeGesture() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) changeLightBoxPhoto('next');
+                else changeLightBoxPhoto('prev');
+            }
+        }
+
+        function adjustLightboxDatePosition() {
+            if (!lightbox.classList.contains('open') && lightbox.style.display !== 'flex') return;
+            if (!lightboxImage.clientHeight) return; 
+
+            const imgHeight = lightboxImage.clientHeight;
+            const viewportHeight = window.innerHeight;
+            
+            const remainingSpace = viewportHeight - imgHeight;
+
+            if (remainingSpace < 75) {
+                lightboxDate.style.bottom = '3px';
+                lightboxDate.style.right = '8px';
+            } else {
+                lightboxDate.style.bottom = '-22px';
+                lightboxDate.style.right = '0px';
+            }
+        }
+
+        lightboxImage.addEventListener('load', adjustLightboxDatePosition);
+
+        lightboxImage.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (galleryContainer.style.display === 'block') {
+                return;
+            }
+            actionSheet.style.display = 'flex';
+            setTimeout(() => actionSheet.classList.add('open'), 10);
+        });
+
+        function closeActionSheet() {
+            actionSheet.classList.remove('open');
+            setTimeout(() => actionSheet.style.display = 'none', 300);
+        }
+        actionCancelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeActionSheet();
+        });
+        actionSheet.addEventListener('click', (e) => {
+            if (e.target === actionSheet) closeActionSheet();
+        });
+
+        actionChangeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeActionSheet();
+            fileInput.click();
+        });
+
+        actionDeleteBtn.addEventListener('click', async (e) => { 
+            e.stopPropagation();
+            if (confirm("この写真をカレンダーから削除しますか？")) {
+                const day = currentSelectedTile.dataset.day;
+                const storageKey = getStorageKey(currentYear, currentMonth);
+                
+                let savedPhotos = await getPhotoData(storageKey); 
+                delete savedPhotos[day];
+                await savePhotoData(storageKey, savedPhotos);
+
+                currentSelectedTile.classList.remove('has-image');
+                const img = currentSelectedTile.querySelector('img');
+                if(img) img.remove();
+
+                const currentCardObj = cardObjects.find(c => c.month === currentMonth);
+                startCardSlideshow(currentCardObj);
+
+                closeActionSheet();
+                lightbox.classList.remove('open');
+                setTimeout(() => lightbox.style.display = 'none', 400);
+            } else {
+                closeActionSheet();
+            }
+        });
+
+        lightboxCloseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            lightbox.classList.remove('open');
+            setTimeout(() => {
+                lightbox.style.display = 'none';
+            }, 400);
+        });
+
+        lightbox.addEventListener('click', (e) => {
+            if (actionSheet.classList.contains('open')) return;
+            lightbox.classList.remove('open');
+            setTimeout(() => {
+                lightbox.style.display = 'none';
+            }, 400);
+        });
+
+        // --- カレンダーの表示と同期 ---
+        async function updateAllCalendarGrids() { 
+            await drawGrid(calCurrent, currentYear, currentMonth);
+            drawGrid(calPrev, currentYear, currentMonth - 1);
+            drawGrid(calNext, currentYear, currentMonth + 1);
+        }
+
+        function syncCalendarPosition() {
+            const gridMargin = (window.innerWidth - calCurrent.offsetWidth) / 2;
+            const targetLeft = calCurrent.offsetLeft - gridMargin;
+            calendarWrapper.scrollLeft = targetLeft;
+        }
+
+        function applyLayerEffects() {
+            if(document.body.classList.contains('calendar-open')) {
+                calendarMonthText.textContent = `${currentYear} . ${String(currentMonth).padStart(2, '0')}`;
+            }
+
+            cardObjects.forEach((cardObj) => {
+                const card = cardObj.element;
+                const diff = cardObj.month - currentMonth;
+                
+                card.style.pointerEvents = "auto"; 
+
+                if (diff === 0) {
+                    card.classList.add('active');
+                    card.style.opacity = "1";
+                    card.style.transform = "scale(1) translateY(0)";
+                    card.style.zIndex = "10";
+                } else {
+                    card.classList.remove('active');
+                    
+                    if (diff === 1) { 
+                        card.style.transform = "scale(0.85) translateY(-30%)";
+                        card.style.opacity = "0.5";
+                        card.style.zIndex = "5";
+                    } 
+                    else if (diff === -1) { 
+                        card.style.transform = "scale(0.85) translateY(30%)";
+                        card.style.opacity = "0.5";
+                        card.style.zIndex = "5";
+                    } 
+                    else if (diff === 2) { 
+                        card.style.transform = "scale(0.7) translateY(-65%)";
+                        card.style.opacity = "0.15";
+                        card.style.zIndex = "4";
+                    }
+                    else if (diff === -2) { 
+                        card.style.transform = "scale(0.7) translateY(65%)";
+                        card.style.opacity = "0.15";
+                        card.style.zIndex = "4";
+                    }
+                    else { 
+                        const sign = Math.sign(diff);
+                        card.style.transform = `scale(0.5) translateY(${sign * -100}%)`;
+                        card.style.opacity = "0";
+                        card.style.zIndex = "1";
+                        card.style.pointerEvents = "none";
                     }
                 }
-                requestAnimationFrame(exportDrawLoop);
-            }
-
-            exportRecorder.start(1000); 
-            exportDrawLoop(); 
-
-            async function playNextForExport() {
-                exportProgressBar.style.width = `${(currentIndex / allExportItems.length) * 100}%`;
-                if (currentIndex >= allExportItems.length) {
-                    isExporting = false; setTimeout(() => { exportRecorder.stop(); }, 500); return;
-                }
-                
-                const item = allExportItems[currentIndex];
-                exportDateStr = item.dateStr;
-
-                exportVideo.src = URL.createObjectURL(item.blob);
-                exportVideo.oncanplay = () => {
-                    exportVideo.play().catch(e => { URL.revokeObjectURL(exportVideo.src); currentIndex++; playNextForExport(); });
-                };
-                exportVideo.onended = () => {
-                    URL.revokeObjectURL(exportVideo.src);
-                    currentIndex++; playNextForExport();
-                };
-            }
-
-            exportRecorder.onstop = () => {
-                exportProgressBar.style.width = "100%";
-                if(dummyOsc) dummyOsc.stop();
-                if(audioCtx) audioCtx.close();
-                
-                setTimeout(() => {
-                    const ext = mime.includes('mp4') ? 'mp4' : 'webm';
-                    const mergedBlob = new Blob(exportChunks, { type: mime });
-                    const safeDateLabel = dateLabel.replace(/\s+/g, '_').replace(/\//g, '-');
-                    
-                    exportCanvas.style.display = "none";
-                    exportTitle.textContent = "COMPLETE.";
-                    exportDesc.innerHTML = "完了しました<br>端末に保存してください";
-                    exportProgressContainer.style.display = "none";
-                    
-                    exportDownloadLink.href = URL.createObjectURL(mergedBlob);
-                    exportDownloadLink.download = `1Year2Hours_${safeDateLabel}.${ext}`;
-                    exportDownloadLink.style.display = "block";
-                    exportReturnBtn.style.display = "block";
-                }, 500);
-            };
-            playNextForExport();
+            });
         }
 
-        exportReturnBtn.onclick = () => {
-            if(exportDownloadLink.href) URL.revokeObjectURL(exportDownloadLink.href);
-            exportScreen.style.display = 'none'; homeScreen.style.display = 'flex';
-        };
+        scrollContainer.addEventListener('scroll', () => {
+            if (isSyncingScroll) return;
 
-        /* --- ナビゲーション --- */
-        document.getElementById('camera-back-btn').onclick = async () => { 
-            recordBtn.disabled = true; 
-            if (isRecording) {
-                isRecording = false; recordBtn.classList.remove('recording'); clearInterval(timerInterval);
-                await stopRecordingAndSave(); 
+            const containerCenter = scrollContainer.scrollTop + scrollContainer.clientHeight / 2;
+            let closestCard = null;
+            let minDiff = Infinity;
+
+            cardObjects.forEach((cardObj) => {
+                const cardCenter = cardObj.element.offsetTop + cardObj.element.clientHeight / 2;
+                const diff = Math.abs(containerCenter - cardCenter);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestCard = cardObj;
+                }
+            });
+
+            if (closestCard && currentMonth !== closestCard.month) {
+                currentMonth = closestCard.month;
+                applyLayerEffects();
             }
-            stopCamera(); 
-            cameraScreen.style.display = 'none'; 
-            homeScreen.style.display = 'flex'; 
-            renderCalendarAndTickets(); 
-            initMonthScreen();
-        };
-        
-        document.getElementById('month-back-btn').onclick = () => { homeScreen.style.display = 'none'; monthScreen.style.display = 'flex'; activeMonthIndex = monthSequence.indexOf(selectedMonth); if (activeMonthIndex === -1) activeMonthIndex = 0; updateMonthCards(); };
 
-        startApp();
+            if(scrollTimeoutId) clearTimeout(scrollTimeoutId);
+            
+            scrollTimeoutId = setTimeout(async () => { 
+                isSyncingScroll = true;
+                
+                await updateAllCalendarGrids();
+                syncCalendarPosition();
+
+                const activeCardObj = cardObjects.find(c => c.month === currentMonth);
+                if (activeCardObj) {
+                    activeCardObj.element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                }
+                
+                setTimeout(() => { isSyncingScroll = false; }, 300);
+            }, 200); 
+        });
+
+        // --- 画像アップロード ---
+        fileInput.addEventListener('change', async (event) => { 
+            const file = event.target.files[0];
+            if (file && currentSelectedTile) {
+                const day = currentSelectedTile.dataset.day;
+                const storageKey = getStorageKey(currentYear, currentMonth);
+                let savedPhotos = await getPhotoData(storageKey); 
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = async function() { 
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        const maxDimension = 800;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > maxDimension) {
+                                height *= maxDimension / width;
+                                width = maxDimension;
+                            }
+                        } else {
+                            if (height > maxDimension) {
+                                width *= maxDimension / height;
+                                height = maxDimension;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        ctx.drawImage(img, 0, 0, width, height);
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+                        const existingImg = currentSelectedTile.querySelector('img');
+                        if (existingImg) existingImg.remove();
+
+                        const displayImg = document.createElement('img');
+                        displayImg.src = compressedDataUrl;
+                        currentSelectedTile.appendChild(displayImg);
+                        currentSelectedTile.classList.add('has-image');
+
+                        if (lightbox.classList.contains('open')) {
+                            lightboxImage.src = compressedDataUrl;
+                            lightboxDate.textContent = `${currentMonth}.${day}`;
+                            collectActiveMonthPhotos();
+                        }
+
+                        try {
+                            savedPhotos[day] = compressedDataUrl;
+                            await savePhotoData(storageKey, savedPhotos); 
+                            
+                            const currentCardObj = cardObjects.find(c => c.month === currentMonth);
+                            startCardSlideshow(currentCardObj);
+
+                        } catch (error) {
+                            alert("写真の保存に失敗しました。");
+                            console.error(error);
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+            fileInput.value = '';
+        });
+
+        // --- 初期起動 ---
+        async function initializeApp() {
+            loadThemeDesign();
+            renderThemeList();
+            createMonthCards();
+            await updateAllCalendarGrids(); 
+            updateAllSlideshows();
+
+            setTimeout(() => {
+                const targetCard = cardObjects.find(c => c.month === currentMonth).element;
+                targetCard.scrollIntoView({ block: 'center', inline: 'nearest' });
+            }, 100);
+        }
+
+        window.addEventListener('resize', () => {
+            syncCalendarPosition();
+            adjustLightboxDatePosition(); 
+        });
+
+        window.addEventListener('load', initializeApp);
+
     </script>
 </body>
 </html>
