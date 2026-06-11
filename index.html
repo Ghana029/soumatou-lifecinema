@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>soumato</title>
+    <title>走馬灯</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="1Year2Hours">
+    <meta name="apple-mobile-web-app-title" content="走馬灯">
     <link rel="apple-touch-icon" href="icon9.jpg?v=2">
 
     <style>
@@ -611,12 +611,13 @@
                     }
                     
                     if (recordedData[dataKey] && recordedData[dataKey].exists) { 
-                        startPlayback([dataKey]); 
+                        // ★変更：カレンダーからの再生は「7秒間のチラ見せモード（true）」にする
+                        startPlayback([dataKey], true); 
                         return; 
                     }
                     
                     if (!isToday) { 
-                        if (currentDate > todayResetObj) alert('記憶がどれだけ大切で、どれだけ苦しいものなのか!'); 
+                        if (currentDate > todayResetObj) alert('記憶がどれだけ大切で素晴らしくて、苦しいものなのか！'); 
                         else alert('この日は忙しかったんだっけ'); 
                     }
                 };
@@ -828,9 +829,15 @@
         /* === 6. 再生画面 === */
         let playlistUrls = [];
         let currentPlayIndex = 0;
+        let isPreviewMode = false;      // ★追加：チラ見せモードの判定
+        let previewPlayTime = 0;        // ★追加：再生した秒数の合計
+        let lastVideoTime = 0;          // ★追加：時間計算用
 
-        async function startPlayback(keys) {
+        async function startPlayback(keys, isPreview = false) {
             playlistUrls = [];
+            isPreviewMode = isPreview;  // モードをセット
+            previewPlayTime = 0;        // 再生秒数をリセット
+            
             for (let key of keys) {
                 const chunks = await getFullChunksForDate(key);
                 const parts = key.split('-');
@@ -858,10 +865,27 @@
             playbackView.style.opacity = '0';
             
             playbackView.src = currentItem.url;
+            lastVideoTime = 0; // 秒数計算の初期化
             
             playbackView.onplaying = () => {
                 playbackLoading.style.display = 'none';
                 playbackView.style.opacity = '1';
+            };
+
+            // ★追加：動画の時間を監視し、7秒に達したら静かに終了する
+            playbackView.ontimeupdate = () => {
+                if (!isPreviewMode) return;
+                
+                const currentTime = playbackView.currentTime;
+                if (currentTime > lastVideoTime) {
+                    previewPlayTime += (currentTime - lastVideoTime);
+                }
+                lastVideoTime = currentTime;
+
+                if (previewPlayTime >= 7) {
+                    playbackView.ontimeupdate = null;
+                    closePlaybackScreen(); // 7秒で強制的にカレンダーへ戻る
+                }
             };
 
             playbackView.play().catch(e => console.log("自動再生ブロック:", e));
@@ -871,7 +895,8 @@
         playbackContainer.onclick = () => { if (playbackView.paused) playbackView.play(); else playbackView.pause(); };
 
         function closePlaybackScreen() {
-            playbackView.pause(); playbackView.onended = null; playbackView.onplaying = null;
+            // ★修正：イベントリスナーを全て解除して安全に閉じる
+            playbackView.pause(); playbackView.onended = null; playbackView.onplaying = null; playbackView.ontimeupdate = null;
             playlistUrls.forEach(item => URL.revokeObjectURL(item.url)); playlistUrls = [];
             playbackView.src = ""; playbackScreen.style.display = 'none'; homeScreen.style.display = 'flex';
         }
